@@ -47,6 +47,7 @@ typedef enum opcode {
     EOP,  /* eop                    (end of program with return 0) */
     EOPV, /* eop   src1             (end of program with return src1) */
     EOPVI,/* eop   imm1             (end of program with return imm1) */
+    DEBUG /* debug                  (print ram, register value) */
 } opcode_t;
 
 #endif

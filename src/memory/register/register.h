@@ -6,26 +6,27 @@
 #define REG_ZERO 64
 #define REG_COUNT 64
 
+#define r(v) v /* for Indicates that it is a register */
+#define rZ 64 /* Zero registor num */
+
 typedef struct {
-    int64_t r[REG_COUNT];
-    uint64_t zf;
-    uint64_t sf;
-    uint64_t cf;
-    uint64_t sp;
+    int64_t registor[REG_COUNT];
+    uint64_t zero_flag;
+    uint64_t sign_flag;
+    uint64_t carry_flag;
+    uint64_t stack_pointer;
 } Registers;
 
 static inline int64_t reg_read(const Registers* regs, uint64_t reg) {
     if (reg == REG_ZERO) { return 0; }
     if (reg >= REG_COUNT) { return 0; }
 
-    return regs->r[reg];
+    return regs->registor[reg];
 }
 
 static inline void reg_write(Registers* regs, uint64_t reg, int64_t value) {
     if (reg == REG_ZERO) { return; }
-
-    if (reg < REG_COUNT)
-        regs->r[reg] = value;
+    if (reg < REG_COUNT) { regs->registor[reg] = value; }
 }
 
 #endif
