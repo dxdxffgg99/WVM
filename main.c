@@ -3,9 +3,7 @@
 CPU cpu;
 
 int main(void) {
-    if (cpu_init(&cpu, 64)) {
-        return 1;
-    }
+    if (cpu_init(&cpu, 64)) { return 1; }
 
     const uint8_t program[] = {
         ADDI, r(0), rZ,   _64bit(90),

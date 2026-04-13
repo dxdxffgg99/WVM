@@ -32,7 +32,7 @@ void cpu_free(CPU* cpu) {
     }
 }
 
-fn run(CPU* cpu) {
+CPU_fn run(CPU* cpu) {
     cpu->running = 1;
 
     while (cpu->running) {
@@ -40,6 +40,7 @@ fn run(CPU* cpu) {
         uint64_t pc      = cpu->pc;
         uint8_t  opcode  = mem_read8(&cpu->ram, pc);
         uint64_t next_pc = pc + 1;
+        uint64_t rng = (uint64_t)time(NULL);
 
         switch (opcode) {
 
@@ -374,7 +375,7 @@ fn run(CPU* cpu) {
                 x ^= x >> 7;
                 x ^= x << 17;
 
-                x ^= rng;
+                x ^= x;
                 rng = x;
 
                 reg_write(&cpu->registors, dst1, (int64_t)rng);

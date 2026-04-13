@@ -12,7 +12,7 @@ typedef enum {
     CPU_ERR_UNKNOWN_COMMAND,
     CPU_ERR_DIV_ZERO,
     CPU_ERR_OVERFLOW,
-} fn;
+} CPU_fn;
 
 typedef struct {
     Registers registors;
@@ -27,6 +27,6 @@ int cpu_init(CPU* cpu, uint64_t ram_size);
 
 void cpu_free(CPU* cpu);
 
-fn run(CPU* cpu);
+CPU_fn run(CPU* cpu);
 
 #endif
