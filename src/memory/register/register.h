@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define REG_ZERO 256
 #define REG_COUNT 256
 
 #define r(v) v /* for Indicates that it is a register */
@@ -17,18 +16,14 @@ typedef struct {
     uint64_t stack_pointer;
 } Registers;
 
-static inline int64_t reg_read(const Registers* regs, uint64_t reg) {
-    if (reg == REG_ZERO) { return 0; }
+static inline int64_t reg_read(const Registers* regs, const uint64_t reg) {
     if (reg >= REG_COUNT) { return 0; }
 
     return regs->registor[reg];
 }
 
-static inline void reg_write(Registers* regs, uint64_t reg, int64_t value) {
-    if (reg == REG_ZERO) { return; }
+static inline void reg_write(Registers* regs, const uint64_t reg, const int64_t value) {
     if (reg < REG_COUNT) { regs->registor[reg] = value; }
 }
-
-typedef uint8_t register_addr_t;
 
 #endif

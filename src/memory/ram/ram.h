@@ -7,26 +7,31 @@
 typedef struct {
     uint8_t* data;
     uint64_t size;
-
-    uint64_t stack_base;
-    uint64_t stack_top;
-
-    uint64_t heap_base;
-    uint64_t heap_top;
 } RAM;
 
-static inline uint8_t mem_read8(const RAM* ram, uint64_t addr) {
+static inline uint8_t
+mem_read8(
+    const RAM* ram,
+    const uint64_t addr)
+{
     assert(addr < ram->size);
     return ram->data[addr];
 }
 
-static inline void mem_write8(RAM* ram, uint64_t addr, uint8_t val) {
+static inline void
+mem_write8(const RAM* ram,
+           const uint64_t addr,
+           const uint8_t val)
+{
     assert(addr < ram->size);
-
     ram->data[addr] = val;
 }
 
-static inline int64_t mem_read64(const RAM* ram, uint64_t addr) {
+static inline int64_t
+mem_read64(
+    const RAM* ram,
+    const uint64_t addr)
+{
     assert(addr + 7 < ram->size);
 
     uint64_t v = 0;
@@ -38,7 +43,11 @@ static inline int64_t mem_read64(const RAM* ram, uint64_t addr) {
     return (int64_t)v;
 }
 
-static inline void mem_write64(RAM* ram, uint64_t addr, int64_t val) {
+static inline void
+mem_write64(const RAM* ram,
+    const uint64_t addr,
+    const int64_t val)
+{
     assert(addr + 7 < ram->size);
 
     uint64_t v = (uint64_t)val;
@@ -47,7 +56,5 @@ static inline void mem_write64(RAM* ram, uint64_t addr, int64_t val) {
         ram->data[addr + i] = (uint8_t)(v >> (8 * i));
     }
 }
-
-typedef uint64_t ram_addr_t;
 
 #endif

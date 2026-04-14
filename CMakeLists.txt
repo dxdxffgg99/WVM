@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 4.2)
 project(wvm C)
 
 set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 add_executable(wvm
         main.c

@@ -1,431 +1,284 @@
 #include "cpu.h"
-#include <time.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
+#include <time.h>
 
-typedef int64_t imm_t;
-static inline int64_t imm64(const RAM* ram, const uint64_t pc) { return mem_read64(ram, pc); }
+#define FETCH() \
+ins = (const instr_t*)(cpu->ram.data + cpu->pc);
 
-int cpu_init(CPU* cpu, uint64_t ram_size) {
-    if (!(cpu && ram_size)) { return 1; }
+#define NEXT() do { \
+    cpu->pc += 13; \
+    FETCH(); \
+    goto *dispatch[ins->opcode]; \
+} while (0)
 
-    cpu->ram.data = (uint8_t*)malloc(ram_size);
-    if (cpu->ram.data == NULL) { return 2; }
+#define JUMP(addr) do { \
+    cpu->pc = (addr); \
+    FETCH(); \
+    goto *dispatch[ins->opcode]; \
+} while (0)
 
-    cpu->ram.size = ram_size;
-    memset(cpu->ram.data, 0, ram_size);
-
-    memset(&cpu->registors, 0, sizeof(Registers));
-    cpu->registors.stack_pointer = ram_size;
-
-    cpu->pc = 0;
-    cpu->running = 0;
-
-    return 0;
-}
-
-void cpu_free(CPU* cpu) {
-    if (cpu && cpu->ram.data) {
-        free(cpu->ram.data);
-        cpu->ram.data = NULL;
-        cpu->ram.size = 0;
-    }
-}
-
-typedef enum {
-    NORMAL,
-    IMM
-} command_mode_t;
-
-typedef struct{
-    opcode_t opcode;
-    command_mode_t mode;
-    register_addr_t dst1;
-    register_addr_t src1;
-    register_addr_t src2;
-    imm_t imm1;
-} command_t;
-
-CPU_fn run(CPU* cpu) {
+uint64_t run(CPU* cpu) {
     cpu->running = 1;
 
-    while (cpu->running) {
-
-        uint64_t pc  = cpu->pc;
-        uint64_t rng = (uint64_t)time(NULL);
-
-        command_t command= {
-            mem_read8(&cpu->ram, pc),
-            mem_read8(&cpu->ram, pc+1),
-            mem_read64(&cpu->ram, pc+2),
-            mem_read64(&cpu->ram, pc+2),
-            mem_read64(&cpu->ram, pc+2),
-            mem_read64(&cpu->ram, pc+2),
-        };
-
-        switch (command.opcode) {
-
-            case NOP: {
-                break;
-            }
-
-            case ADD: {
-                (!command.mode) ?
-                    reg_write(&cpu->registors, command.dst1, command.src1 + command.src2):
-                    reg_write(&cpu->registors, command.dst1, command.src1 + command.imm1);
-                break;
-            }
-
-            case SUB: {
-                (!command.mode) ?
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
-                break;
-            }
-
-            case MUL: {
-                (!command.mode) ?
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
-                break;
-            }
-
-
-            case DIV: {
-                (!command.mode) ? 
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
-                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
-                break;
-            }
-
-            case OR: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) |
-                    reg_read(&cpu->registors, src2));
-                break;
-            }
-
-            case ORI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) | imm1);
-                break;
-            }
-
-            case AND: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) &
-                    reg_read(&cpu->registors, src2));
-                break;
-            }
-
-            case ANDI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) & imm1);
-                break;
-            }
-
-            case XOR: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) ^
-                    reg_read(&cpu->registors, src2));
-                break;
-            }
-
-            case XORI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) ^ imm1);
-                break;
-            }
-
-            case JMP: {
-                uint8_t r = mem_read8(&cpu->ram, next_pc++);
-                cpu->pc = reg_read(&cpu->registors, r);
-                continue;
-            }
-
-            case JMPI: {
-                cpu->pc = imm64(&cpu->ram, next_pc);
-                continue;
-            }
-
-            case CMP: {
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t v_src1 = (int64_t)reg_read(&cpu->registors, src1);
-                int64_t v_src2 = (int64_t)reg_read(&cpu->registors, src2);
-
-                int64_t res = v_src1 - v_src2;
-
-                cpu->registors.zero_flag = (res == 0);
-                cpu->registors.sign_flag = (res < 0);
-                break;
-            }
-
-            case CMPI: {
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                int64_t v_src1 = (int64_t)reg_read(&cpu->registors, src1);
-                int64_t res = v_src1 - imm;
-
-                cpu->registors.zero_flag = (res == 0);
-                cpu->registors.sign_flag = (res < 0);
-                cpu->registors.carry_flag = (v_src1 < imm);
-
-                break;
-            }
-
-
-            case JE: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (cpu->registors.zero_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
-
-            case JNE: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (!cpu->registors.zero_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
-
-            case JL: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (cpu->registors.sign_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
-
-            case JG: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (!cpu->registors.zero_flag && !cpu->registors.sign_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
-
-            case JLE: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (cpu->registors.zero_flag || cpu->registors.sign_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
+    static void* dispatch[] = {
+        &&OP_NOP,
+        &&OP_ADD,
+        &&OP_SUB,
+        &&OP_MUL,
+        &&OP_DIV,
 
-            case JGE: {
-                int64_t addr = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
+        &&OP_INC,
+        &&OP_DEC,
 
-                if (!cpu->registors.sign_flag) {
-                    cpu->pc = addr;
-                    continue;
-                }
-                break;
-            }
+        &&OP_JMP,
+        &&OP_CMP,
 
-            case LOAD: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t base = mem_read8(&cpu->ram, next_pc++);
+        &&OP_JE,
+        &&OP_JNE,
+        &&OP_JL,
+        &&OP_JG,
+        &&OP_JLE,
+        &&OP_JGE,
 
-                int64_t off = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
+        &&OP_SETZ,
 
-                uint64_t addr =
-                    (uint64_t)reg_read(&cpu->registors, base) + off;
+        &&OP_MOV,
 
-                reg_write(&cpu->registors, dst1,
-                    mem_read8(&cpu->ram, addr));
-                break;
-            }
+        &&OP_LSH,
+        &&OP_RSH,
 
-            case STORE: {
-                uint8_t base = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src = mem_read8(&cpu->ram, next_pc++);
+        &&OP_LOAD,
+        &&OP_STORE,
 
-                int64_t off = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
+        &&OP_OR,
+        &&OP_AND,
+        &&OP_XOR,
 
-                uint64_t addr =
-                    (uint64_t)reg_read(&cpu->registors, base) + off;
+        &&OP_TIME,
 
-                mem_write8(&cpu->ram, addr,
-                    reg_read(&cpu->registors, src));
-                break;
-            }
+        &&OP_PUSH,
+        &&OP_POP,
 
-            case TIME: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
+        &&OP_CALL,
+        &&OP_RET,
 
-                struct timespec ts;
-                clock_gettime(CLOCK_REALTIME, &ts);
+        &&OP_EOP,
+        &&OP_EOPV,
 
-                int64_t ms =
-                    (int64_t)ts.tv_sec * 1000 +
-                    (int64_t)ts.tv_nsec / 1000000;
-
-                reg_write(&cpu->registors, dst1, ms);
-                break;
-            }
+        &&OP_DEBUG
+    };
 
-            case RAND: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                uint64_t x = (uint64_t)reg_read(&cpu->registors, src1);
+    const instr_t* ins;
 
-                x ^= x << 13;
-                x ^= x >> 7;
-                x ^= x << 17;
+    FETCH();
+    goto *dispatch[ins->opcode];
 
-                x ^= x;
-                rng = x;
+    OP_NOP: { NEXT(); }
 
-                reg_write(&cpu->registors, dst1, (int64_t)rng);
-                break;
-            }
-
-            case PUSH: {
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t v_src1 = reg_read(&cpu->registors, src1);
-
-                cpu->registors.stack_pointer -= 8;
-                mem_write64(&cpu->ram, cpu->registors.stack_pointer, v_src1);
-
-                break;
-            }
-
-            case PUSHI: {
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                cpu->registors.stack_pointer -= 8;
-                mem_write64(&cpu->ram, cpu->registors.stack_pointer, imm1);
-
-                break;
-            }
-
-            case POP: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t value = mem_read64(&cpu->ram, cpu->registors.stack_pointer);
-                cpu->registors.stack_pointer += 8;
-
-                reg_write(&cpu->registors, dst1, value);
-
-                break;
-            }
-
-            case CALL: {
-                int64_t target = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                cpu->registors.stack_pointer -= 8;
-                mem_write64(&cpu->ram, cpu->registors.stack_pointer, (int64_t)next_pc);
-
-                next_pc = target;
-                break;
-            }
-
-            case RET: {
-                int64_t ret_addr = mem_read64(&cpu->ram, cpu->registors.stack_pointer);
-                cpu->registors.stack_pointer += 8;
-
-                next_pc = ret_addr;
-                break;
-            }
-
-            case EOP: {
-                cpu->running = 0;
-                return CPU_OK;
-            }
-
-            case EOPV: {
-                return reg_read(&cpu->registors,mem_read8(&cpu->ram, next_pc));
-            }
-
-            case EOPVI: {
-                return imm64(&cpu->ram, next_pc);
-            }
-
-            case DEBUG: {
-                printf("=======[debug]=======\n");
-
-                printf("RAM : \n");
-                for (int i = 0; i < cpu->ram.size; i++) {
-                    printf("%02x ", mem_read8(&cpu->ram, i));
-                    if ( !((i + 1) % 32) ) { printf("\n"); }
-                } printf("\n\n");
-
-                printf("Registers : \n");
-                for (int i = 0; i < 64; i++) {
-                    printf("%ld ", reg_read(&cpu->registors, i));
-                    if ( !((i + 1) % 8) ) printf("\n");
-                } printf("\n");
-
-                printf("=====================\n");
-            }
-
-            default: {
-                return CPU_ERR_UNKNOWN_COMMAND;
-            }
-        }
-
-        cpu->pc = next_pc;
+    OP_ADD: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) +
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
     }
 
-    return CPU_OK;
+    OP_SUB: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) -
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_MUL: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) *
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_DIV: {
+        assert(
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2)) != 0
+        );
+
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) /
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_INC: {
+        reg_write(&cpu->regs, ins->dst,
+            reg_read(&cpu->regs, ins->dst) + 1);
+        NEXT();
+    }
+
+    OP_DEC: {
+        reg_write(&cpu->regs, ins->dst,
+            reg_read(&cpu->regs, ins->dst) - 1);
+        NEXT();
+    }
+
+    OP_JMP: { JUMP(get_src1); }
+
+    OP_CMP: {
+        const int64_t a = reg_read(&cpu->regs, ins->src1);
+        const int64_t b = get_src2;
+        const int64_t r = a - b;
+
+        cpu->regs.zero_flag = (r == 0);
+        cpu->regs.sign_flag = (r < 0);
+        cpu->regs.carry_flag = (a < b);
+
+        NEXT();
+    }
+
+    OP_JE: { if (cpu->regs.zero_flag) JUMP(get_src1); NEXT(); }
+    OP_JNE: { if (!cpu->regs.zero_flag) JUMP(get_src1); NEXT(); }
+    OP_JL: { if (cpu->regs.sign_flag) JUMP(get_src1); NEXT(); }
+    OP_JG: { if (!cpu->regs.sign_flag && !cpu->regs.zero_flag) JUMP(get_src1); NEXT(); }
+    OP_JLE: { if (cpu->regs.sign_flag || cpu->regs.zero_flag) JUMP(get_src1); NEXT(); }
+    OP_JGE: { if (!cpu->regs.sign_flag) JUMP(get_src1); NEXT(); }
+
+    OP_SETZ: {
+        reg_write(&cpu->regs, ins->dst, (int64_t)cpu->regs.zero_flag);
+        NEXT();
+    }
+
+    OP_MOV: {
+        reg_write(&cpu->regs, ins->dst, get_src1);
+        NEXT();
+    }
+
+    OP_LSH: {
+        reg_write(&cpu->regs, ins->dst,
+            (int64_t)((uint64_t)reg_read(&cpu->regs, ins->src1) << (get_src2 & 63)));
+        NEXT();
+    }
+
+    OP_RSH: {
+        reg_write(&cpu->regs, ins->dst,
+            (int64_t)((uint64_t)reg_read(&cpu->regs, ins->src1) >> (get_src2 & 63)));
+        NEXT();
+    }
+
+    OP_LOAD: {
+        reg_write(&cpu->regs, ins->dst, mem_read64(&cpu->ram, get_src1));
+        NEXT();
+    }
+
+    OP_STORE: {
+        mem_write64(&cpu->ram, get_src1, reg_read(&cpu->regs, ins->dst));
+        NEXT();
+    }
+
+    OP_OR: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) |
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_AND: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) &
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_XOR: {
+        reg_write(&cpu->regs,
+            ins->dst,
+            reg_read(&cpu->regs, ins->src1) ^
+            (ins->mode ? ins->imm : reg_read(&cpu->regs, ins->src2))
+        );
+        NEXT();
+    }
+
+    OP_TIME: {
+        reg_write(&cpu->regs, ins->dst, (int64_t)time(NULL));
+        NEXT();
+    }
+
+    OP_PUSH: {
+        cpu->regs.stack_pointer -= 8;
+        mem_write64(&cpu->ram, cpu->regs.stack_pointer, get_src1);
+        NEXT();
+    }
+
+    OP_POP: {
+        reg_write(&cpu->regs, ins->dst,
+            mem_read64(&cpu->ram, cpu->regs.stack_pointer));
+        cpu->regs.stack_pointer += 8;
+        NEXT();
+    }
+
+    OP_CALL: {
+        cpu->regs.stack_pointer -= 8;
+        mem_write64(&cpu->ram, cpu->regs.stack_pointer, (int64_t)cpu->pc + 13);
+        JUMP((ins->mode) ? ins->imm : reg_read(&cpu->regs, ins->src2));
+    }
+
+    OP_RET: {
+        cpu->pc = (uint64_t)mem_read64(&cpu->ram, cpu->regs.stack_pointer);
+        cpu->regs.stack_pointer += 8;
+        FETCH();
+        goto *dispatch[((instr_t*)(cpu->ram.data + cpu->pc))->opcode];
+    }
+
+    OP_EOP: {
+        cpu->running = 0;
+        cpu->rv = 0;
+        goto FINAL;
+    }
+
+    OP_EOPV: {
+        cpu->running = 0;
+        cpu->rv = (ins->mode) ? (int)ins->imm : (int)reg_read(&cpu->regs, ins->src1);
+        goto FINAL;
+    }
+
+    OP_DEBUG: {
+        printf("\n");
+        printf("==============================================================================================================================================\n");
+        printf("============================================================= REGISTER =======================================================================\n");
+        printf("==============================================================================================================================================\n");
+
+        for (int base = 0; base < REG_COUNT; base += 8) {
+            printf("R%03d | ", base);
+
+            for (int i = 0; i < 8 && (base + i) < REG_COUNT; i++) {
+                printf("%16ld ", reg_read(&cpu->regs, base + i));
+            }
+
+            printf("\n");
+        }
+
+        printf("==============================================================================================================================================\n");
+        printf("============================================================ DEBUG END =======================================================================\n");
+        printf("==============================================================================================================================================\n");
+
+        NEXT();
+    }
+
+
+FINAL:
+    free(cpu->ram.data);
+    cpu->ram.data = NULL;
+    cpu->ram.size = 0;
+
+    return cpu->rv;
 }

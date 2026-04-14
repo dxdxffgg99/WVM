@@ -3,23 +3,24 @@
 CPU cpu;
 
 int main(void) {
-    if (cpu_init(&cpu, 64)) { return 1; }
+    if (cpu_init(&cpu, 1024)) { return 1; }
 
-    const uint8_t program[] = {
-        ADDI, r(0), rZ,   _64bit(90),
-        SUBI, r(1), r(0), _64bit(30),
-        DIVI, r(2), r(1), _64bit(15),
-        MULI, r(3), r(2), _64bit(5),
-        TIME, r(63),
-        RAND, r(4), r(63),
-        DEBUG,
-        NOP,
-        EOP
+    const instr_t program[] = {
+        { MOV, 1, 0, 0, 0, 100000000 },
+        { MOV, 1, 1, 0, 0, 0 },
+
+        { ADD, 0, 1, 1, 0, 0 },
+        { XOR, 1, 1, 1, 0, 1234567 },
+        { ADD, 1, 0, 0, 0, -1 },
+        { CMP, 1, 0, 0, 0, 0 },
+        { JG, 1, 0, 0, 0, 26 },
+
+        { EOP, 0, 0, 0, 0, 0 },
     };
 
-    load_program(&cpu, program, sizeof(program));
-    run(&cpu);
-    cpu_free(&cpu);
+    load_program(&cpu, program, sizeof(program) / sizeof(instr_t));
 
-    return 0;
+    const int rv = (int)run(&cpu);
+
+    return rv;
 }

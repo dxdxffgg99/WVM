@@ -6,9 +6,4 @@
 #include "bytecode/opcode.h"
 #include <string.h>
 
-static void load_program(CPU* cpu, const uint8_t* code, size_t size) {
-    memcpy(cpu->ram.data, code, size);
-    cpu->pc = 0;
-}
-
 #endif
