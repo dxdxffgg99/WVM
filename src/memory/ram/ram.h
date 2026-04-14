@@ -48,4 +48,6 @@ static inline void mem_write64(RAM* ram, uint64_t addr, int64_t val) {
     }
 }
 
+typedef uint64_t ram_addr_t;
+
 #endif

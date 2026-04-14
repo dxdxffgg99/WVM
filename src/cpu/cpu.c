@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef int64_t imm_t;
 static inline int64_t imm64(const RAM* ram, const uint64_t pc) { return mem_read64(ram, pc); }
 
 int cpu_init(CPU* cpu, uint64_t ram_size) {
@@ -32,115 +33,69 @@ void cpu_free(CPU* cpu) {
     }
 }
 
+typedef enum {
+    NORMAL,
+    IMM
+} command_mode_t;
+
+typedef struct{
+    opcode_t opcode;
+    command_mode_t mode;
+    register_addr_t dst1;
+    register_addr_t src1;
+    register_addr_t src2;
+    imm_t imm1;
+} command_t;
+
 CPU_fn run(CPU* cpu) {
     cpu->running = 1;
 
     while (cpu->running) {
 
-        uint64_t pc      = cpu->pc;
-        uint8_t  opcode  = mem_read8(&cpu->ram, pc);
-        uint64_t next_pc = pc + 1;
+        uint64_t pc  = cpu->pc;
         uint64_t rng = (uint64_t)time(NULL);
 
-        switch (opcode) {
+        command_t command= {
+            mem_read8(&cpu->ram, pc),
+            mem_read8(&cpu->ram, pc+1),
+            mem_read64(&cpu->ram, pc+2),
+            mem_read64(&cpu->ram, pc+2),
+            mem_read64(&cpu->ram, pc+2),
+            mem_read64(&cpu->ram, pc+2),
+        };
+
+        switch (command.opcode) {
 
             case NOP: {
                 break;
             }
 
             case ADD: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) +
-                    reg_read(&cpu->registors, src2));
-                break;
-            }
-
-            case ADDI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) + imm1);
+                (!command.mode) ?
+                    reg_write(&cpu->registors, command.dst1, command.src1 + command.src2):
+                    reg_write(&cpu->registors, command.dst1, command.src1 + command.imm1);
                 break;
             }
 
             case SUB: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) -
-                    reg_read(&cpu->registors, src2));
-                break;
-            }
-
-            case SUBI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) - imm1);
+                (!command.mode) ?
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
                 break;
             }
 
             case MUL: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) *
-                    reg_read(&cpu->registors, src2));
+                (!command.mode) ?
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
                 break;
             }
 
-            case MULI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) * imm1);
-                break;
-            }
 
             case DIV: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src2 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t v_src2 = reg_read(&cpu->registors, src2);
-                if (v_src2== 0) { return CPU_ERR_DIV_ZERO; }
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) / v_src2);
-                break;
-            }
-
-            case DIVI: {
-                uint8_t dst1 = mem_read8(&cpu->ram, next_pc++);
-                uint8_t src1 = mem_read8(&cpu->ram, next_pc++);
-
-                int64_t imm1 = imm64(&cpu->ram, next_pc);
-                next_pc += 8;
-
-                if (imm1 == 0) { return CPU_ERR_DIV_ZERO; }
-
-                reg_write(&cpu->registors, dst1,
-                    reg_read(&cpu->registors, src1) / imm1);
+                (!command.mode) ? 
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.src2):
+                    reg_write(&cpu->registors, command.dst1, command.src1 - command.imm1);
                 break;
             }
 
