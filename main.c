@@ -15,7 +15,7 @@ int main(void) {
         { CMP, 1, r(0), 0, 0, 0 },
         { JG, 1, 0, 0, 0, 26 },
 
-        { EOP, 0, 0, 0, 0, 0 },,,
+        { EOP, 0, 0, 0, 0, 0 },
     };
 
     load_program(&cpu, program, sizeof(program) / sizeof(instr_t));
