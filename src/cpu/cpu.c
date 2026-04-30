@@ -3,23 +3,23 @@
 #include <stdlib.h>
 #include <time.h>
 
+uint64_t run(CPU* cpu) {
+    cpu->running = 1;
+
 #define FETCH() \
 ins = (const instr_t*)(cpu->ram.data + cpu->pc);
 
 #define NEXT() do { \
-    cpu->pc += 13; \
-    FETCH(); \
-    goto *dispatch[ins->opcode]; \
+cpu->pc += 13; \
+FETCH(); \
+goto *dispatch[ins->opcode]; \
 } while (0)
 
 #define JUMP(addr) do { \
-    cpu->pc = (addr); \
-    FETCH(); \
-    goto *dispatch[ins->opcode]; \
+cpu->pc = (addr); \
+FETCH(); \
+goto *dispatch[ins->opcode]; \
 } while (0)
-
-uint64_t run(CPU* cpu) {
-    cpu->running = 1;
 
     static void* dispatch[] = {
         &&OP_NOP,
@@ -279,6 +279,10 @@ FINAL:
     free(cpu->ram.data);
     cpu->ram.data = NULL;
     cpu->ram.size = 0;
+
+#undef NEXT
+#undef JUMP
+#undef FETCH
 
     return cpu->rv;
 }
