@@ -18,7 +18,10 @@ mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make
 ```
-The executable is generated as `wvm` (or `wvm.exe` on Windows).
+The executable is generated as `wvm`.
+
+this project is tested on Linux 7.0.3-arch1-2, Ubuntu-latest.
+computed goto is not supported on MSVC so this program may not work on Windows.
 
 ## Running a Program
 
@@ -66,6 +69,37 @@ WVM/
 - **Add new opcodes**: Define in `opcode.h`, implement handlers in `cpu.c`.
 - **Improve assembler**: Support macros, more addressing modes.
 - **Performance**: Profile and optimize hot paths or add JIT.
+
+## Benchmark
+
+i9 14900k @ 6.00GHz
+
+```assembly
+mov $0, %r0
+mov $0, %r1
+mov $1000000000, %r2
+loop:
+    add $1, %r0
+    mul %r0, $2
+    sub %r0, $1
+    and %r0, $0xFF
+    add $1, %r1
+    cmp %r1, %r2
+    jl loop
+eopv %r0
+```
+
+```shell
+Assemble start
+Assemble finished
+VM start
+VM finished
+Assembly time: 0.000024 s
+VM Run time:   6.940064 s
+RV: 1000000000
+```
+
+1.01 GIPS (Giga Instructions Per Second) on this benchmark. (6 cpu cycles/instr.)
 
 ## License
 

@@ -1,12 +1,10 @@
 #include "assembler.h"
 #include "../bytecode/opcode.h"
 #include "../cpu/cpu.h"
-#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 
 typedef struct {
     const char *name;

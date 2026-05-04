@@ -2,6 +2,7 @@
 #include "src/asm/assembler.h"
 #include <stdio.h>
 #include <time.h>
+#include <stdint.h>
 
 CPU cpu;
 
