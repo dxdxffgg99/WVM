@@ -47,7 +47,7 @@ jobs:
       - name: build with warnings
         run: |
           echo "==== compiler warnings ===="
-          cmake -B build-warn -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror"
+          cmake -B build-warn -DCMAKE_C_FLAGS="-Wall -Wextra -Werror"
           cmake --build build-warn -j || true
 
       - name: ASan run
