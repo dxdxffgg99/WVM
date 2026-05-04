@@ -31,6 +31,8 @@ int main(void) {
     uint8_t program[4096];
     struct timespec start, end;
 
+    printf("Assemble start\n");
+
     clock_gettime(CLOCK_MONOTONIC, &start);
     size_t size = assemble(assembly, program, sizeof(program));
     clock_gettime(CLOCK_MONOTONIC, &end);
@@ -42,12 +44,18 @@ int main(void) {
         return 1;
     }
 
+    printf("Assemble finished\n");
+
     load_program(&cpu, program, size);
+
+    printf("VM start\n");
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     const int64_t rv = run(&cpu);
     clock_gettime(CLOCK_MONOTONIC, &end);
     double run_time = get_time_sec(end) - get_time_sec(start);
+
+    printf("VM finished\n");
 
     printf("Assembly time: %.6f s\n", assemble_time);
     printf("VM Run time:   %.6f s\n", run_time);
