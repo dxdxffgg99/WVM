@@ -99,7 +99,7 @@ VM Run time:   6.940064 s
 RV: 1000000000
 ```
 
-1.01 GIPS (Giga Instructions Per Second) on this benchmark. (6 cpu cycles/instr.)
+1.01 GIPS on this benchmark. (6 cpu cycles/instr.)
 
 ## License
 
