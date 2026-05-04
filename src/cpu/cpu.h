@@ -17,28 +17,28 @@ typedef uint8_t reg_addr_t;
 typedef uint64_t ram_addr_t;
 
 typedef struct instr_s {
-        uint8_t opcode;
-        uint8_t mode;
-        uint8_t dst;
-        uint8_t src1;
-        uint8_t src2;
-        int64_t imm;
-        uint8_t size;
-        uint64_t addr;
-        int32_t jump_pci;
-        void *handler;
-        struct instr_s *jump_target;
+    uint8_t opcode;
+    uint8_t mode;
+    uint8_t dst;
+    uint8_t src1;
+    uint8_t src2;
+    int64_t imm;
+    uint8_t size;
+    uint64_t addr;
+    int32_t jump_pci;
+    void *handler;
+    struct instr_s *jump_target;
 } instr_t;
 
 typedef struct {
-        Registers regs;
-        RAM ram;
-        ram_addr_t pc;
-        instr_t *decoded_program;
-        ram_addr_t decoded_size;
-        bool running;
-        bool is_threaded;
-        int64_t rv;
+    Registers regs;
+    RAM ram;
+    ram_addr_t pc;
+    instr_t *decoded_program;
+    ram_addr_t decoded_size;
+    bool running;
+    bool is_threaded;
+    int64_t rv;
 } CPU;
 
 #define INSTR_MIN_SIZE 5
