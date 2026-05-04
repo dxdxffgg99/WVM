@@ -5,8 +5,8 @@
 
 #define REG_COUNT 256
 
-#define r(v) (v)    /* Indicates that it is a register index */
-#define rZ    (256)  /* Zero register number */
+#define r(v) (v)
+#define rZ (256)
 
 typedef struct {
     int64_t registers[REG_COUNT];
