@@ -5,11 +5,11 @@
 
 #define REG_COUNT 256
 
-#define r(v) v /* for Indicates that it is a register */
-#define rZ 256 /* Zero register num */
+#define r(v) (v)    /* Indicates that it is a register index */
+#define rZ    (256)  /* Zero register number */
 
 typedef struct {
-    int64_t Register[REG_COUNT];
+    int64_t registers[REG_COUNT];
     uint64_t zero_flag;
     uint64_t sign_flag;
     uint64_t carry_flag;
@@ -17,13 +17,11 @@ typedef struct {
 } Registers;
 
 static inline int64_t reg_read(const Registers* regs, const uint64_t reg) {
-    if (reg >= REG_COUNT) { return 0; }
-
-    return regs->Register[reg];
+    return regs->registers[reg];
 }
 
 static inline void reg_write(Registers* regs, const uint64_t reg, const int64_t value) {
-    if (reg < REG_COUNT) { regs->Register[reg] = value; }
+    regs->registers[reg] = value;
 }
 
 #endif

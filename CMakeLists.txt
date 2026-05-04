@@ -12,5 +12,7 @@ add_executable(wvm
         src/memory/ram/ram.h
         src/memory/register/register.h
         src/cpu/cpu.c
+        src/asm/assembler.h
+        src/asm/assembler.c
         src/wvm.h
 )

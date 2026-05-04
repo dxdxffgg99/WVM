@@ -4,6 +4,5 @@
 #include "memory/memory.h"
 #include "cpu/cpu.h"
 #include "bytecode/opcode.h"
-#include <string.h>
 
 #endif
