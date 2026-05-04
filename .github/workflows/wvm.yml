@@ -1,0 +1,35 @@
+name: VM Benchmark
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake
+
+      - name: Build (Release)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+
+      - name: Warmup
+        run: |
+          ./build/wvm > /dev/null || true
+
+      - name: Benchmark (10 runs)
+        run: |
+          echo "==== VM Benchmark ===="
+          for i in {1..10}; do
+            ./build/wvm
+          done
