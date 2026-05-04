@@ -33,3 +33,26 @@ jobs:
           for i in {1..3}; do
             ./build/wvm
           done
+          
+      - name: clang-tidy
+        run: |
+          echo "==== clang-tidy ===="
+          cmake -B build-tidy -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          cmake --build build-tidy -j
+          
+          find src -name '*.c' | while read f; do
+            clang-tidy "$f" -p build-tidy || true
+          done
+          
+      - name: build with warnings
+        run: |
+          echo "==== compiler warnings ===="
+          cmake -B build-warn -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror"
+          cmake --build build-warn -j || true
+
+      - name: ASan run
+        run: |
+          cmake -B build-asan -DCMAKE_C_FLAGS="-fsanitize=address -O1" \
+                              -DCMAKE_CXX_FLAGS="-fsanitize=address -O1"
+          cmake --build build-asan -j
+          ./build-asan/wvm || true
