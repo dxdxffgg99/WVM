@@ -289,7 +289,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -301,7 +301,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -313,7 +313,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -322,7 +322,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -331,7 +331,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -340,7 +340,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -349,7 +349,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -358,7 +358,7 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
@@ -367,12 +367,11 @@ int64_t run(CPU* cpu) {
             p_ins = p_ins->jump_target;
             goto *p_ins->handler;
         }
-        p_ins += 2; // Skip NOP
+        p_ins += 2;
         goto *p_ins->handler;
     }
 
     OP_MADD: {
-        // dst = dst * src1 + src2
         WRITE_REG(p_ins->dst, READ_REG(p_ins->dst) * READ_REG(p_ins->src1) + READ_REG(p_ins->src2));
         NEXT();
     }
@@ -445,7 +444,6 @@ int64_t run(CPU* cpu) {
     OP_MOV_STORE_IMM: {
         const int64_t val = p_ins->imm;
         WRITE_REG(p_ins->dst, val);
-        // During fusion, we ensured that the STORE part uses a register for address.
         const uint64_t addr = READ_REG(p_ins->src2);
         CHECK_MEM(addr, 8);
         *(int64_t*)&m_ram_data[addr] = val;
@@ -469,14 +467,14 @@ bool instr_decode(const uint8_t* buffer, size_t limit, instr_t* instr) {
     instr->src2 = buffer[4];
     instr->size = INSTR_MIN_SIZE;
 
-    if (instr->mode & ADDR_MODE_IMM) { // Bit 0: Has immediate
+    if (instr->mode & ADDR_MODE_IMM) {
         instr->imm = 0;
-        int imm_size = (instr->mode & ADDR_MODE_IMM8) ? 8 : 4; // Bit 1: 8 bytes if set, else 4
+        int imm_size = (instr->mode & ADDR_MODE_IMM8) ? 8 : 4;
         if (limit < (size_t)(INSTR_MIN_SIZE + imm_size)) return false;
         for (int i = 0; i < imm_size; i++) {
             instr->imm |= ((imm_t)buffer[5 + i]) << (8 * i);
         }
-        // Sign extend if 4 bytes
+
         if (imm_size == 4) {
             if (instr->imm & 0x80000000) {
                 instr->imm |= 0xFFFFFFFF00000000;
@@ -542,7 +540,6 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
     cpu->pc = 0;
     cpu->is_threaded = false;
 
-    // Pre-decode the program
     if (cpu->decoded_program) {
         free(cpu->decoded_program);
         cpu->decoded_program = NULL;
@@ -564,7 +561,6 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
         offset += ins.size;
     }
 
-    // Resolve jump targets for immediate jumps
     for (ram_addr_t i = 0; i < cpu->decoded_size; i++) {
         instr_t* ins = &cpu->decoded_program[i];
         switch (ins->opcode) {
@@ -585,14 +581,12 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
         }
     }
 
-    // Fusion Pass
     for (ram_addr_t i = 0; i + 1 < cpu->decoded_size; i++) {
         instr_t* ins1 = &cpu->decoded_program[i];
         instr_t* ins2 = &cpu->decoded_program[i+1];
 
         if (ins1->opcode == NOP) continue;
 
-        // 3-instruction fusion: INC %r1 + CMP %r1, $imm + JL target -> INC_CMP_JL_IMM
         if (i + 2 < cpu->decoded_size) {
             instr_t* ins3 = &cpu->decoded_program[i+2];
             if (ins1->opcode == INC && ins2->opcode == CMP && (ins2->mode & ADDR_MODE_IMM) && ins3->opcode == JL) {
@@ -607,8 +601,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 }
             }
         }
-        
-        // ADD $imm, %reg1 + LOOP target, %reg2 -> ADD_LOOP_IMM
+
         if (ins1->opcode == ADD && (ins1->mode & ADDR_MODE_IMM) && ins2->opcode == LOOP) {
             if (ins2->jump_pci == (int32_t)i) {
                 ins1->opcode = ADD_LOOP_IMM;
@@ -618,7 +611,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // INC %reg1 + LOOP target, %reg2 -> INC_LOOP
+
         else if (ins1->opcode == INC && ins2->opcode == LOOP) {
             if (ins2->jump_pci == (int32_t)i) {
                 ins1->opcode = INC_LOOP;
@@ -628,7 +621,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // DEC %reg1 + LOOP target, %reg2 -> DEC_LOOP
+
         else if (ins1->opcode == DEC && ins2->opcode == LOOP) {
             if (ins2->jump_pci == (int32_t)i) {
                 ins1->opcode = DEC_LOOP;
@@ -638,7 +631,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // CMP %reg, $imm + Jcc target -> CMP_Jcc_IMM
+
         else if (ins1->opcode == CMP && (ins1->mode & ADDR_MODE_IMM) && (ins2->opcode >= JE && ins2->opcode <= JGE)) {
             if (ins2->mode & ADDR_MODE_IMM) {
                 ins1->opcode = CMP_JE_IMM + (ins2->opcode - JE);
@@ -647,7 +640,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // CMP %reg1, %reg2 + Jcc target -> CMP_Jcc_REG
+
         else if (ins1->opcode == CMP && !(ins1->mode & ADDR_MODE_IMM) && (ins2->opcode >= JE && ins2->opcode <= JGE)) {
             if (ins2->mode & ADDR_MODE_IMM) {
                 ins1->opcode = CMP_JE_REG + (ins2->opcode - JE);
@@ -656,7 +649,7 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // MOV $imm, %r1 + STORE %r1, %r2 -> MOV_STORE_IMM
+
         else if (ins1->opcode == MOV && (ins1->mode & ADDR_MODE_IMM) && ins2->opcode == STORE && !(ins2->mode & ADDR_MODE_IMM)) {
             if (ins1->dst == ins2->dst) {
                 ins1->opcode = MOV_STORE_IMM;
@@ -664,13 +657,13 @@ void load_program(CPU* cpu, const uint8_t* code, const ram_addr_t size) {
                 ins2->opcode = NOP;
             }
         }
-        // MUL %rA, %rB + ADD %rC, %rB -> MADD %rA, %rC, %rB (rB = rB * rA + rC)
+
         else if (ins1->opcode == MUL && ins2->opcode == ADD && !(ins1->mode & ADDR_MODE_IMM) && !(ins2->mode & ADDR_MODE_IMM)) {
             if (ins1->dst == ins2->dst) {
                 if (ins1->src1 == ins1->dst && ins2->src1 == ins2->dst) {
                     ins1->opcode = MADD;
-                    ins1->src1 = ins1->src2; // Multiplier
-                    ins1->src2 = ins2->src2; // Addend
+                    ins1->src1 = ins1->src2;
+                    ins1->src2 = ins2->src2;
                     ins2->opcode = NOP;
                 }
             }

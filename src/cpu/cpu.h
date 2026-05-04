@@ -23,11 +23,11 @@ typedef struct instr_s {
     uint8_t src1;
     uint8_t src2;
     int64_t imm;
-    uint8_t size; // Decoded size
-    uint64_t addr; // Original byte address
-    int32_t jump_pci; // Resolved jump target index, -1 if not resolved or dynamic
-    void* handler;    // Direct threading handler
-    struct instr_s* jump_target; // Direct pointer to jump target
+    uint8_t size;
+    uint64_t addr;
+    int32_t jump_pci;
+    void* handler;
+    struct instr_s* jump_target;
 } instr_t;
 
 typedef struct {
