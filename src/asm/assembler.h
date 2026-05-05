@@ -4,6 +4,15 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "../bytecode/opcode.h"
+#include "../cpu/cpu.h"
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef enum {
     ASM_ERROR_NONE = 0,
@@ -30,6 +39,11 @@ typedef struct {
     int error_count;
     bool debug_mode;
 } AsmContext;
+
+typedef struct {
+    const char *name;
+    opcode_t op;
+} OpMapping;
 
 AsmContext *asm_create_context(bool debug_mode);
 

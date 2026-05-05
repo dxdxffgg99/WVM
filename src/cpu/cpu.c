@@ -1,9 +1,37 @@
 #include "cpu.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 
-int64_t run(CPU *cpu) {
+static instr_t
+*find_instruction_by_addr(CPU *cpu,
+                          uint64_t addr)
+{
+    ram_addr_t low = 0;
+    ram_addr_t high = cpu->decoded_size;
+
+    while (low < high) {
+        ram_addr_t mid = (low + high) >> 1;
+        if (cpu->decoded_program[mid].addr < addr) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+
+    if (low < cpu->decoded_size && cpu->decoded_program[low].addr == addr) {
+        return &cpu->decoded_program[low];
+    }
+    return NULL;
+}
+
+int64_t
+run(CPU *cpu)
+{
+    if (!cpu                  ||
+        !cpu->decoded_program ||
+        cpu->decoded_size == 0)
+    {
+        return -1;
+    }
+
     static void *dispatch[] = {
         &&OP_NOP, &&OP_ADD, &&OP_SUB, &&OP_MUL, &&OP_DIV,
         &&OP_INC, &&OP_DEC, &&OP_JMP, &&OP_CMP, &&OP_JE,
@@ -44,24 +72,14 @@ int64_t run(CPU *cpu) {
     goto *p_ins->handler; \
 } while (0)
 
-#define JUMP(target_addr) do { \
-    if (p_ins->jump_target) { \
-        p_ins = p_ins->jump_target; \
-    } else { \
-        uint64_t _addr = (target_addr); \
-        ram_addr_t _pci = 0; \
-        while (_pci < cpu->decoded_size && cpu->decoded_program[_pci].addr < _addr) { \
-            _pci++; \
-        } \
-        p_ins = &cpu->decoded_program[_pci]; \
-    } \
-    goto *p_ins->handler; \
-} while (0)
-
-#define GET_SRC1 ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src1]))
-#define GET_SRC2 ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src2]))
-#define READ_REG(reg) regs->registers[(reg)]
-#define WRITE_REG(reg, val) m_regs->registers[(reg)] = (val)
+#define GET_SRC1 \
+    ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src1]))
+#define GET_SRC2 \
+    ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src2]))
+#define READ_REG(reg) \
+    regs->registers[(reg)]
+#define WRITE_REG(reg, val) \
+    m_regs->registers[(reg)] = (val)
 
 #define BINARY_OP(op) do { \
     WRITE_REG(p_ins->dst, READ_REG(p_ins->src1) op GET_SRC2); \
@@ -71,11 +89,27 @@ int64_t run(CPU *cpu) {
 #define CHECK_MEM(addr, len) do { \
     uint64_t _addr = (uint64_t)(addr); \
     uint64_t _len = (uint64_t)(len); \
-    if (_addr + _len > cpu->ram.size) { \
+    if (_len > cpu->ram.size || _addr > cpu->ram.size || _addr > cpu->ram.size - _len) { \
         cpu->running = false; \
         cpu->rv = -1; \
         goto FINAL; \
     } \
+} while (0)
+
+#define JUMP(target_addr) do {                                    \
+    if (p_ins->jump_target) {                                     \
+        p_ins = p_ins->jump_target;                               \
+    } else {                                                      \
+        uint64_t _addr = (target_addr);                           \
+        instr_t *_target = find_instruction_by_addr(cpu, _addr);  \
+        if (!_target) {                                           \
+            cpu->running = false;                                 \
+            cpu->rv = -1;                                         \
+            goto FINAL;                                           \
+        }                                                         \
+        p_ins = _target;                                          \
+    }                                                             \
+    goto *p_ins->handler;                                         \
 } while (0)
 
     goto *p_ins->handler;
@@ -198,13 +232,16 @@ OP_RSH: {
 
 OP_LOAD: {
         CHECK_MEM(GET_SRC1, 8);
-        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[GET_SRC1]);
+        int64_t value;
+        memcpy(&value, &ram_data[GET_SRC1], sizeof(value));
+        WRITE_REG(p_ins->dst, value);
         NEXT();
     }
 
 OP_STORE: {
         CHECK_MEM(GET_SRC2, 8);
-        *(int64_t *) &m_ram_data[GET_SRC2] = READ_REG(p_ins->dst);
+        int64_t value = READ_REG(p_ins->dst);
+        memcpy(&m_ram_data[GET_SRC2], &value, sizeof(value));
         NEXT();
     }
 
@@ -232,13 +269,16 @@ OP_PUSH: {
             goto FINAL;
         }
         m_regs->stack_pointer -= 8;
-        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = GET_SRC1;
+        int64_t value = GET_SRC1;
+        memcpy(&m_ram_data[m_regs->stack_pointer], &value, sizeof(value));
         NEXT();
     }
 
 OP_POP: {
         CHECK_MEM(regs->stack_pointer, 8);
-        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[regs->stack_pointer]);
+        int64_t value;
+        memcpy(&value, &ram_data[regs->stack_pointer], sizeof(value));
+        WRITE_REG(p_ins->dst, value);
         m_regs->stack_pointer += 8;
         NEXT();
     }
@@ -253,7 +293,7 @@ OP_CALL: {
         uint64_t ret_index = (uint64_t)(p_ins - cpu->decoded_program + 1);
 
         m_regs->stack_pointer -= 8;
-        *(uint64_t *)&m_ram_data[m_regs->stack_pointer] = ret_index;
+        memcpy(&m_ram_data[m_regs->stack_pointer], &ret_index, sizeof(ret_index));
 
         JUMP(GET_SRC1);
     }
@@ -261,7 +301,8 @@ OP_CALL: {
 OP_RET: {
         CHECK_MEM(regs->stack_pointer, 8);
 
-        uint64_t ret = *(uint64_t *)&ram_data[regs->stack_pointer];
+        uint64_t ret;
+        memcpy(&ret, &ram_data[regs->stack_pointer], sizeof(ret));
         m_regs->stack_pointer += 8;
 
         if (ret >= cpu->decoded_size) {
@@ -465,10 +506,10 @@ OP_MOV_STORE_IMM: {
         WRITE_REG(p_ins->dst, val);
         const uint64_t addr = READ_REG(p_ins->src2);
         CHECK_MEM(addr, 8);
-         *(int64_t *) &m_ram_data[addr] = val;
-         p_ins += 2;
-         goto *p_ins->handler;
-     }
+        memcpy(&m_ram_data[addr], &val, sizeof(val));
+        p_ins += 2;
+        goto *p_ins->handler;
+    }
 
 OP_SYSCALL: {
          const int64_t syscall_num = GET_SRC1;
@@ -480,7 +521,10 @@ OP_SYSCALL: {
                      goto FINAL;
                  }
                  m_regs->stack_pointer -= 8;
-                 *(int64_t *) &m_ram_data[regs->stack_pointer] = READ_REG(0);
+                 {
+                     int64_t val = READ_REG(0);
+                     memcpy(&m_ram_data[regs->stack_pointer], &val, sizeof(val));
+                 }
                  break;
              case 1:
                  if (regs->stack_pointer + 8 > cpu->ram.size) {
@@ -635,7 +679,10 @@ FINAL:
 }
 
 bool instr_decode(const uint8_t *buffer, size_t limit, instr_t *instr) {
-    if (limit < INSTR_MIN_SIZE) return false;
+    if (limit < INSTR_MIN_SIZE) {
+        return false;
+    }
+
     instr->opcode = buffer[0];
     instr->mode = buffer[1];
     instr->dst = buffer[2];
@@ -723,6 +770,9 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
 
     cpu->decoded_program = (instr_t *) malloc(sizeof(instr_t) * (size / 5 + 1));
     cpu->decoded_size = 0;
+    if (!cpu->decoded_program) {
+        return;
+    }
 
     ram_addr_t offset = 0;
     while (offset < size) {
@@ -847,26 +897,20 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
     }
 }
 
-void cpu_dump_registers(const CPU *cpu) {
-    printf(
-        "\n==============================================================================================================================================\n");
-    printf(
-        "============================================================= REGISTER =======================================================================\n");
-    printf(
-        "==============================================================================================================================================\n");
+void
+cpu_dump_registers(const CPU *cpu)
+{
+    printf("============================================================= REGISTER =======================================================================\n");
 
     for (int base = 0; base < REG_COUNT; base += 8) {
         printf("R%03d | ", base);
+
         for (int i = 0; i < 8 && (base + i) < REG_COUNT; i++) {
             printf("%16ld ", reg_read(&cpu->regs, (uint64_t) (base + i)));
         }
+
         printf("\n");
     }
 
-    printf(
-        "==============================================================================================================================================\n");
-    printf(
-        "============================================================ DEBUG END =======================================================================\n");
-    printf(
-        "==============================================================================================================================================\n");
+    printf("============================================================ DEBUG END =======================================================================\n");
 }

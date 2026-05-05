@@ -8,11 +8,15 @@
 
 CPU cpu;
 
-static double get_time_sec(struct timespec ts) {
+static double
+get_time_sec(struct timespec ts)
+{
     return (double) ts.tv_sec + (double) ts.tv_nsec / 1000000000.0;
 }
 
-char* read_assembly_file(const char* filepath, size_t *out_size) {
+char*
+read_assembly_file(const char* filepath, size_t *out_size)
+{
     FILE* file = fopen(filepath, "rb");
     if (!file) {
         fprintf(stderr, "Error: Cannot open file '%s'\n", filepath);
@@ -54,13 +58,17 @@ char* read_assembly_file(const char* filepath, size_t *out_size) {
     return buffer;
 }
 
-void print_usage(const char* program_name) {
+void
+print_usage(const char* program_name)
+{
     printf("Usage: %s <assembly_file.asm>\n", program_name);
     printf("\nExample:\n");
     printf("  %s program.asm\n", program_name);
 }
 
-int main(int argc, char* argv[]) {
+int
+main(int argc, char* argv[])
+{
     if (argc < 2) {
         fprintf(stderr, "Error: No assembly file specified\n");
         print_usage(argv[0]);

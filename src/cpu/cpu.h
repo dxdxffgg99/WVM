@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include "../memory/ram/ram.h"
 #include "../memory/register/register.h"
 #include "../bytecode/opcode.h"
