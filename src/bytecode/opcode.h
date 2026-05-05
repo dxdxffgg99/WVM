@@ -54,7 +54,8 @@ typedef enum opcode {
     CMP_JLE_REG = 47,
     CMP_JGE_REG = 48,
     INC_CMP_JL_IMM = 49,
-    MOV_STORE_IMM = 50
+    MOV_STORE_IMM = 50,
+    SYSCALL = 51
 } opcode_t;
 
 #endif

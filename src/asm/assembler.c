@@ -12,13 +12,40 @@ typedef struct {
 } OpMapping;
 
 static const OpMapping op_table[] = {
-    {"nop", NOP}, {"add", ADD}, {"sub", SUB}, {"mul", MUL}, {"div", DIV},
-    {"inc", INC}, {"dec", DEC}, {"jmp", JMP}, {"cmp", CMP}, {"je", JE},
-    {"jne", JNE}, {"jl", JL}, {"jg", JG}, {"jle", JLE}, {"jge", JGE},
-    {"setz", SETZ}, {"mov", MOV}, {"lsh", LSH}, {"rsh", RSH}, {"load", LOAD},
-    {"store", STORE}, {"or", OR}, {"and", AND}, {"xor", XOR}, {"time", TIME},
-    {"push", PUSH}, {"pop", POP}, {"call", CALL}, {"ret", RET}, {"eop", EOP},
-    {"eopv", EOPV}, {"debug", DEBUG}, {"loop", LOOP},
+    {"nop", NOP},
+    {"add", ADD},
+    {"sub", SUB},
+    {"mul", MUL},
+    {"div", DIV},
+    {"inc", INC},
+    {"dec", DEC},
+    {"jmp", JMP},
+    {"cmp", CMP},
+    {"je", JE},
+    {"jne", JNE},
+    {"jl", JL},
+    {"jg", JG},
+    {"jle", JLE},
+    {"jge", JGE},
+    {"setz", SETZ},
+    {"mov", MOV},
+    {"lsh", LSH},
+    {"rsh", RSH},
+    {"load", LOAD},
+    {"store", STORE},
+    {"or", OR},
+    {"and", AND},
+    {"xor", XOR},
+    {"time", TIME},
+    {"push", PUSH},
+    {"pop", POP},
+    {"call", CALL},
+    {"ret", RET},
+    {"eop", EOP},
+    {"eopv", EOPV},
+    {"debug", DEBUG},
+    {"loop", LOOP},
+    {"syscall", SYSCALL},
     {NULL, NOP}
 };
 
@@ -343,6 +370,15 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                         imm = parse_immediate(t_op1, &is_imm);
                         mode = ADDR_MODE_IMM;
                     } else {
+                        src1 = (uint8_t) parse_register(t_op1);
+                    }
+                    break;
+                case SYSCALL:
+                    if (t_op1[0] == '$') {
+                        imm = parse_immediate(t_op1, &is_imm);
+                        mode = ADDR_MODE_IMM;
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
+                    } else if (t_op1[0] == '%') {
                         src1 = (uint8_t) parse_register(t_op1);
                     }
                     break;

@@ -15,7 +15,8 @@ int64_t run(CPU *cpu) {
         &&OP_INC_LOOP, &&OP_DEC_LOOP, &&OP_CMP_JE_IMM, &&OP_CMP_JNE_IMM,
         &&OP_CMP_JL_IMM, &&OP_CMP_JG_IMM, &&OP_CMP_JLE_IMM, &&OP_CMP_JGE_IMM,
         &&OP_MADD, &&OP_CMP_JE_REG, &&OP_CMP_JNE_REG, &&OP_CMP_JL_REG, &&OP_CMP_JG_REG,
-        &&OP_CMP_JLE_REG, &&OP_CMP_JGE_REG, &&OP_INC_CMP_JL_IMM, &&OP_MOV_STORE_IMM
+         &&OP_CMP_JLE_REG, &&OP_CMP_JGE_REG, &&OP_INC_CMP_JL_IMM, &&OP_MOV_STORE_IMM,
+         &&OP_SYSCALL
     };
 
     if (!cpu->is_threaded) {
@@ -35,6 +36,11 @@ int64_t run(CPU *cpu) {
 
 #define NEXT() do { \
     p_ins++; \
+    if (p_ins >= cpu->decoded_program + cpu->decoded_size) { \
+        cpu->running = false; \
+        cpu->rv = 0; \
+        goto FINAL; \
+    } \
     goto *p_ins->handler; \
 } while (0)
 
@@ -226,7 +232,7 @@ OP_PUSH: {
             goto FINAL;
         }
         m_regs->stack_pointer -= 8;
-        *(int64_t *) &m_ram_data[regs->stack_pointer] = GET_SRC1;
+        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = GET_SRC1;
         NEXT();
     }
 
@@ -243,16 +249,29 @@ OP_CALL: {
             cpu->rv = -1;
             goto FINAL;
         }
+
+        uint64_t ret_index = (uint64_t)(p_ins - cpu->decoded_program + 1);
+
         m_regs->stack_pointer -= 8;
-        *(int64_t *) &m_ram_data[regs->stack_pointer] = (int64_t) p_ins->addr + p_ins->size;
+        *(uint64_t *)&m_ram_data[m_regs->stack_pointer] = ret_index;
+
         JUMP(GET_SRC1);
     }
 
 OP_RET: {
         CHECK_MEM(regs->stack_pointer, 8);
-        const uint64_t target = *(uint64_t *) &ram_data[regs->stack_pointer];
+
+        uint64_t ret = *(uint64_t *)&ram_data[regs->stack_pointer];
         m_regs->stack_pointer += 8;
-        JUMP(target);
+
+        if (ret >= cpu->decoded_size) {
+            cpu->running = false;
+            cpu->rv = -1;
+            goto FINAL;
+        }
+
+        p_ins = &cpu->decoded_program[ret];
+        goto *p_ins->handler;
     }
 
 OP_EOP: {
@@ -446,10 +465,167 @@ OP_MOV_STORE_IMM: {
         WRITE_REG(p_ins->dst, val);
         const uint64_t addr = READ_REG(p_ins->src2);
         CHECK_MEM(addr, 8);
-        *(int64_t *) &m_ram_data[addr] = val;
-        p_ins += 2;
-        goto *p_ins->handler;
-    }
+         *(int64_t *) &m_ram_data[addr] = val;
+         p_ins += 2;
+         goto *p_ins->handler;
+     }
+
+OP_SYSCALL: {
+         const int64_t syscall_num = GET_SRC1;
+         switch (syscall_num) {
+             case 0:
+                 if (m_regs->stack_pointer < 8) {
+                     cpu->running = false;
+                     cpu->rv = -1;
+                     goto FINAL;
+                 }
+                 m_regs->stack_pointer -= 8;
+                 *(int64_t *) &m_ram_data[regs->stack_pointer] = READ_REG(0);
+                 break;
+             case 1:
+                 if (regs->stack_pointer + 8 > cpu->ram.size) {
+                     cpu->running = false;
+                     cpu->rv = -1;
+                     goto FINAL;
+                 }
+                 WRITE_REG(0, *(int64_t*)&ram_data[regs->stack_pointer]);
+                 m_regs->stack_pointer += 8;
+                 break;
+             case 2:
+                 printf("%ld", READ_REG(0));
+                 break;
+             case 3: {
+                 int64_t ch = READ_REG(0);
+                 if (ch >= 0 && ch <= 127) {
+                     printf("%c", (char)ch);
+                 } else if (ch >= 128 && ch <= 0x7FF) {
+                     char utf8[3];
+                     utf8[0] = (char)(0xC0 | (ch >> 6));
+                     utf8[1] = (char)(0x80 | (ch & 0x3F));
+                     utf8[2] = '\0';
+                     printf("%s", utf8);
+                 } else if (ch >= 0x800 && ch <= 0xFFFF) {
+                     char utf8[4];
+                     utf8[0] = (char)(0xE0 | (ch >> 12));
+                     utf8[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
+                     utf8[2] = (char)(0x80 | (ch & 0x3F));
+                     utf8[3] = '\0';
+                     printf("%s", utf8);
+                 } else if (ch >= 0x10000 && ch <= 0x10FFFF) {
+                     char utf8[5];
+                     utf8[0] = (char)(0xF0 | (ch >> 18));
+                     utf8[1] = (char)(0x80 | ((ch >> 12) & 0x3F));
+                     utf8[2] = (char)(0x80 | ((ch >> 6) & 0x3F));
+                     utf8[3] = (char)(0x80 | (ch & 0x3F));
+                     utf8[4] = '\0';
+                     printf("%s", utf8);
+                 }
+                 break;
+             }
+             case 4: {
+                 uint64_t addr = READ_REG(1);
+
+                 CHECK_MEM(addr, 8);
+
+                 int64_t tmp;
+                 memcpy(&tmp, &cpu->ram.data[addr], 8);
+
+                 WRITE_REG(0, tmp);
+                 break;
+             }
+             case 5: {
+                 uint64_t addr = READ_REG(1);
+                 int64_t val = READ_REG(2);
+                 CHECK_MEM(addr, 8);
+                 *(int64_t *)&m_ram_data[addr] = val;
+                 break;
+             }
+             case 6: {
+                 int ch = getchar();
+                 WRITE_REG(0, (int64_t)ch);
+                 break;
+             }
+             case 9: {
+                 printf("\n");
+                 break;
+             }
+             case 10: {
+                 printf("Hash: %lx\n", READ_REG(0));
+                 break;
+             }
+             case 11: {
+                 int64_t val = READ_REG(0);
+                 printf("%ld (0x%lx)\n", val, val);
+                 break;
+             }
+             case 12: {
+                 printf("Hex: 0x%lx\n", READ_REG(0));
+                 break;
+             }
+             case 13: {
+                 printf("Binary: ");
+                 int64_t val = READ_REG(0);
+                 for (int i = 63; i >= 0; i--) {
+                     printf("%d", (int)((val >> i) & 1));
+                 }
+                 printf("\n");
+                 break;
+             }
+             case 14: {
+                 printf("RAM Size: %lu bytes\n", cpu->ram.size);
+                 printf("Stack Pointer: %lu\n", regs->stack_pointer);
+                 break;
+             }
+             case 15: {
+                 uint64_t dest = READ_REG(1);
+                 uint64_t src = READ_REG(2);
+                 int64_t len = READ_REG(3);
+                 if (len < 0) {
+                     cpu->running = false;
+                     cpu->rv = -1;
+                     goto FINAL;
+                 }
+                 CHECK_MEM(dest, (size_t)len);
+                 CHECK_MEM(src, (size_t)len);
+                 memcpy(&m_ram_data[dest], &ram_data[src], (size_t)len);
+                 break;
+             }
+             case 16: {
+                 uint64_t addr = READ_REG(1);
+                 int64_t val = READ_REG(2);
+                 int64_t len = READ_REG(3);
+                 if (len < 0) {
+                     cpu->running = false;
+                     cpu->rv = -1;
+                     goto FINAL;
+                 }
+                 CHECK_MEM(addr, (size_t)len);
+                 memset(&m_ram_data[addr], (int)val, (size_t)len);
+                 break;
+             }
+             case 17: {
+                 int64_t us = READ_REG(0);
+
+                 if (us < 0) {
+                     cpu->running = false;
+                     cpu->rv = -1;
+                     goto FINAL;
+                 }
+
+                 struct timespec req;
+                 req.tv_sec = us / 1000000;
+                 req.tv_nsec = (us % 1000000) * 1000;
+
+                 nanosleep(&req, NULL);
+                 break;
+             }
+             default:
+                 cpu->running = false;
+                 cpu->rv = -1;
+                 goto FINAL;
+         }
+         NEXT();
+     }
 
 FINAL:
 #undef NEXT
@@ -550,8 +726,7 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
 
     ram_addr_t offset = 0;
     while (offset < size) {
-        instr_t ins;
-        memset(&ins, 0, sizeof(instr_t));
+        instr_t ins = {0};
         if (!instr_decode(cpu->ram.data + offset, size - offset, &ins)) {
             break;
         }
