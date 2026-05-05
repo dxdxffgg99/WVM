@@ -15,8 +15,8 @@ int64_t run(CPU *cpu) {
         &&OP_INC_LOOP, &&OP_DEC_LOOP, &&OP_CMP_JE_IMM, &&OP_CMP_JNE_IMM,
         &&OP_CMP_JL_IMM, &&OP_CMP_JG_IMM, &&OP_CMP_JLE_IMM, &&OP_CMP_JGE_IMM,
         &&OP_MADD, &&OP_CMP_JE_REG, &&OP_CMP_JNE_REG, &&OP_CMP_JL_REG, &&OP_CMP_JG_REG,
-         &&OP_CMP_JLE_REG, &&OP_CMP_JGE_REG, &&OP_INC_CMP_JL_IMM, &&OP_MOV_STORE_IMM,
-         &&OP_SYSCALL
+        &&OP_CMP_JLE_REG, &&OP_CMP_JGE_REG, &&OP_INC_CMP_JL_IMM, &&OP_MOV_STORE_IMM,
+        &&OP_SYSCALL
     };
 
     if (!cpu->is_threaded) {
