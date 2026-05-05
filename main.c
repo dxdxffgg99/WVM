@@ -67,7 +67,7 @@ char *
 get_filename_from_user() {
     static char filename[256];
 
-    printf("\x1b[92m\x1b[1mWVM - WebAssembly Virtual Machine\x1b[0m\n");
+    printf("\x1b[92m\x1b[1mWVM - Warp speed Virtual Machine\x1b[0m\n");
     printf("\x1b[96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\n");
     printf("\x1b[93m\x1b[1mAssembly file not specified.\x1b[0m\n\n");
     printf("\x1b[1mEnter assembly file path:\x1b[0m ");
@@ -124,7 +124,7 @@ main(int argc, char *argv[]) {
     printf("\x1b[92m\x1b[1m===[Assemble start]===\n\x1b[0m");
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    size_t size = assemble(assembly, program, sizeof(program));
+        size_t size = assemble(assembly, program, sizeof(program));
     clock_gettime(CLOCK_MONOTONIC, &end);
     double assemble_time = get_time_sec(end) - get_time_sec(start);
 
@@ -142,7 +142,7 @@ main(int argc, char *argv[]) {
     printf("\x1b[92m\x1b[1m===[VM start]===\n\x1b[0m");
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    const int64_t rv = run(&cpu);
+        const int64_t rv = run(&cpu);
     clock_gettime(CLOCK_MONOTONIC, &end);
     double run_time = get_time_sec(end) - get_time_sec(start);
 
