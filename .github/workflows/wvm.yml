@@ -31,7 +31,7 @@ jobs:
         run: |
           echo "==== VM Benchmark ===="
           for i in {1..3}; do
-            ./build/wvm ../examples/benchmark.asm
+            ./build/wvm ./examples/benchmark.asm
           done
           
       - name: clang-tidy
