@@ -18,16 +18,14 @@ typedef struct {
 
 static inline int64_t
 reg_read(const Registers *regs,
-         const uint64_t reg)
-{
+         const uint64_t reg) {
     return regs->registers[reg];
 }
 
 static inline void
 reg_write(Registers *regs,
           const uint64_t reg,
-          const int64_t value)
-{
+          const int64_t value) {
     regs->registers[reg] = value;
 }
 

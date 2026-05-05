@@ -2,8 +2,7 @@
 
 static instr_t
 *find_instruction_by_addr(CPU *cpu,
-                          uint64_t addr)
-{
+                          uint64_t addr) {
     ram_addr_t low = 0;
     ram_addr_t high = cpu->decoded_size;
 
@@ -23,12 +22,10 @@ static instr_t
 }
 
 int64_t
-run(CPU *cpu)
-{
-    if (!cpu                  ||
+run(CPU *cpu) {
+    if (!cpu ||
         !cpu->decoded_program ||
-        cpu->decoded_size == 0)
-    {
+        cpu->decoded_size == 0) {
         return -1;
     }
 
@@ -290,7 +287,7 @@ OP_CALL: {
             goto FINAL;
         }
 
-        uint64_t ret_index = (uint64_t)(p_ins - cpu->decoded_program + 1);
+        uint64_t ret_index = (uint64_t) (p_ins - cpu->decoded_program + 1);
 
         m_regs->stack_pointer -= 8;
         memcpy(&m_ram_data[m_regs->stack_pointer], &ret_index, sizeof(ret_index));
@@ -512,164 +509,164 @@ OP_MOV_STORE_IMM: {
     }
 
 OP_SYSCALL: {
-         const int64_t syscall_num = GET_SRC1;
-         switch (syscall_num) {
-             case 0:
-                 if (m_regs->stack_pointer < 8) {
-                     cpu->running = false;
-                     cpu->rv = -1;
-                     goto FINAL;
-                 }
-                 m_regs->stack_pointer -= 8;
-                 {
-                     int64_t val = READ_REG(0);
-                     memcpy(&m_ram_data[regs->stack_pointer], &val, sizeof(val));
-                 }
-                 break;
-             case 1:
-                 if (regs->stack_pointer + 8 > cpu->ram.size) {
-                     cpu->running = false;
-                     cpu->rv = -1;
-                     goto FINAL;
-                 }
-                 WRITE_REG(0, *(int64_t*)&ram_data[regs->stack_pointer]);
-                 m_regs->stack_pointer += 8;
-                 break;
-             case 2:
-                 printf("%ld", READ_REG(0));
-                 break;
-             case 3: {
-                 int64_t ch = READ_REG(0);
-                 if (ch >= 0 && ch <= 127) {
-                     printf("%c", (char)ch);
-                 } else if (ch >= 128 && ch <= 0x7FF) {
-                     char utf8[3];
-                     utf8[0] = (char)(0xC0 | (ch >> 6));
-                     utf8[1] = (char)(0x80 | (ch & 0x3F));
-                     utf8[2] = '\0';
-                     printf("%s", utf8);
-                 } else if (ch >= 0x800 && ch <= 0xFFFF) {
-                     char utf8[4];
-                     utf8[0] = (char)(0xE0 | (ch >> 12));
-                     utf8[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
-                     utf8[2] = (char)(0x80 | (ch & 0x3F));
-                     utf8[3] = '\0';
-                     printf("%s", utf8);
-                 } else if (ch >= 0x10000 && ch <= 0x10FFFF) {
-                     char utf8[5];
-                     utf8[0] = (char)(0xF0 | (ch >> 18));
-                     utf8[1] = (char)(0x80 | ((ch >> 12) & 0x3F));
-                     utf8[2] = (char)(0x80 | ((ch >> 6) & 0x3F));
-                     utf8[3] = (char)(0x80 | (ch & 0x3F));
-                     utf8[4] = '\0';
-                     printf("%s", utf8);
-                 }
-                 break;
-             }
-             case 4: {
-                 uint64_t addr = READ_REG(1);
+        const int64_t syscall_num = GET_SRC1;
+        switch (syscall_num) {
+            case 0:
+                if (m_regs->stack_pointer < 8) {
+                    cpu->running = false;
+                    cpu->rv = -1;
+                    goto FINAL;
+                }
+                m_regs->stack_pointer -= 8;
+                {
+                    int64_t val = READ_REG(0);
+                    memcpy(&m_ram_data[regs->stack_pointer], &val, sizeof(val));
+                }
+                break;
+            case 1:
+                if (regs->stack_pointer + 8 > cpu->ram.size) {
+                    cpu->running = false;
+                    cpu->rv = -1;
+                    goto FINAL;
+                }
+                WRITE_REG(0, *(int64_t*)&ram_data[regs->stack_pointer]);
+                m_regs->stack_pointer += 8;
+                break;
+            case 2:
+                printf("%ld", READ_REG(0));
+                break;
+            case 3: {
+                int64_t ch = READ_REG(0);
+                if (ch >= 0 && ch <= 127) {
+                    printf("%c", (char) ch);
+                } else if (ch >= 128 && ch <= 0x7FF) {
+                    char utf8[3];
+                    utf8[0] = (char) (0xC0 | (ch >> 6));
+                    utf8[1] = (char) (0x80 | (ch & 0x3F));
+                    utf8[2] = '\0';
+                    printf("%s", utf8);
+                } else if (ch >= 0x800 && ch <= 0xFFFF) {
+                    char utf8[4];
+                    utf8[0] = (char) (0xE0 | (ch >> 12));
+                    utf8[1] = (char) (0x80 | ((ch >> 6) & 0x3F));
+                    utf8[2] = (char) (0x80 | (ch & 0x3F));
+                    utf8[3] = '\0';
+                    printf("%s", utf8);
+                } else if (ch >= 0x10000 && ch <= 0x10FFFF) {
+                    char utf8[5];
+                    utf8[0] = (char) (0xF0 | (ch >> 18));
+                    utf8[1] = (char) (0x80 | ((ch >> 12) & 0x3F));
+                    utf8[2] = (char) (0x80 | ((ch >> 6) & 0x3F));
+                    utf8[3] = (char) (0x80 | (ch & 0x3F));
+                    utf8[4] = '\0';
+                    printf("%s", utf8);
+                }
+                break;
+            }
+            case 4: {
+                uint64_t addr = READ_REG(1);
 
-                 CHECK_MEM(addr, 8);
+                CHECK_MEM(addr, 8);
 
-                 int64_t tmp;
-                 memcpy(&tmp, &cpu->ram.data[addr], 8);
+                int64_t tmp;
+                memcpy(&tmp, &cpu->ram.data[addr], 8);
 
-                 WRITE_REG(0, tmp);
-                 break;
-             }
-             case 5: {
-                 uint64_t addr = READ_REG(1);
-                 int64_t val = READ_REG(2);
-                 CHECK_MEM(addr, 8);
-                 *(int64_t *)&m_ram_data[addr] = val;
-                 break;
-             }
-             case 6: {
-                 int ch = getchar();
-                 WRITE_REG(0, (int64_t)ch);
-                 break;
-             }
-             case 9: {
-                 printf("\n");
-                 break;
-             }
-             case 10: {
-                 printf("Hash: %lx\n", READ_REG(0));
-                 break;
-             }
-             case 11: {
-                 int64_t val = READ_REG(0);
-                 printf("%ld (0x%lx)\n", val, val);
-                 break;
-             }
-             case 12: {
-                 printf("Hex: 0x%lx\n", READ_REG(0));
-                 break;
-             }
-             case 13: {
-                 printf("Binary: ");
-                 int64_t val = READ_REG(0);
-                 for (int i = 63; i >= 0; i--) {
-                     printf("%d", (int)((val >> i) & 1));
-                 }
-                 printf("\n");
-                 break;
-             }
-             case 14: {
-                 printf("RAM Size: %lu bytes\n", cpu->ram.size);
-                 printf("Stack Pointer: %lu\n", regs->stack_pointer);
-                 break;
-             }
-             case 15: {
-                 uint64_t dest = READ_REG(1);
-                 uint64_t src = READ_REG(2);
-                 int64_t len = READ_REG(3);
-                 if (len < 0) {
-                     cpu->running = false;
-                     cpu->rv = -1;
-                     goto FINAL;
-                 }
-                 CHECK_MEM(dest, (size_t)len);
-                 CHECK_MEM(src, (size_t)len);
-                 memcpy(&m_ram_data[dest], &ram_data[src], (size_t)len);
-                 break;
-             }
-             case 16: {
-                 uint64_t addr = READ_REG(1);
-                 int64_t val = READ_REG(2);
-                 int64_t len = READ_REG(3);
-                 if (len < 0) {
-                     cpu->running = false;
-                     cpu->rv = -1;
-                     goto FINAL;
-                 }
-                 CHECK_MEM(addr, (size_t)len);
-                 memset(&m_ram_data[addr], (int)val, (size_t)len);
-                 break;
-             }
-             case 17: {
-                 int64_t us = READ_REG(0);
+                WRITE_REG(0, tmp);
+                break;
+            }
+            case 5: {
+                uint64_t addr = READ_REG(1);
+                int64_t val = READ_REG(2);
+                CHECK_MEM(addr, 8);
+                *(int64_t *) &m_ram_data[addr] = val;
+                break;
+            }
+            case 6: {
+                int ch = getchar();
+                WRITE_REG(0, (int64_t)ch);
+                break;
+            }
+            case 9: {
+                printf("\n");
+                break;
+            }
+            case 10: {
+                printf("Hash: %lx\n", READ_REG(0));
+                break;
+            }
+            case 11: {
+                int64_t val = READ_REG(0);
+                printf("%ld (0x%lx)\n", val, val);
+                break;
+            }
+            case 12: {
+                printf("Hex: 0x%lx\n", READ_REG(0));
+                break;
+            }
+            case 13: {
+                printf("Binary: ");
+                int64_t val = READ_REG(0);
+                for (int i = 63; i >= 0; i--) {
+                    printf("%d", (int) ((val >> i) & 1));
+                }
+                printf("\n");
+                break;
+            }
+            case 14: {
+                printf("RAM Size: %lu bytes\n", cpu->ram.size);
+                printf("Stack Pointer: %lu\n", regs->stack_pointer);
+                break;
+            }
+            case 15: {
+                uint64_t dest = READ_REG(1);
+                uint64_t src = READ_REG(2);
+                int64_t len = READ_REG(3);
+                if (len < 0) {
+                    cpu->running = false;
+                    cpu->rv = -1;
+                    goto FINAL;
+                }
+                CHECK_MEM(dest, (size_t)len);
+                CHECK_MEM(src, (size_t)len);
+                memcpy(&m_ram_data[dest], &ram_data[src], (size_t) len);
+                break;
+            }
+            case 16: {
+                uint64_t addr = READ_REG(1);
+                int64_t val = READ_REG(2);
+                int64_t len = READ_REG(3);
+                if (len < 0) {
+                    cpu->running = false;
+                    cpu->rv = -1;
+                    goto FINAL;
+                }
+                CHECK_MEM(addr, (size_t)len);
+                memset(&m_ram_data[addr], (int) val, (size_t) len);
+                break;
+            }
+            case 17: {
+                int64_t us = READ_REG(0);
 
-                 if (us < 0) {
-                     cpu->running = false;
-                     cpu->rv = -1;
-                     goto FINAL;
-                 }
+                if (us < 0) {
+                    cpu->running = false;
+                    cpu->rv = -1;
+                    goto FINAL;
+                }
 
-                 struct timespec req;
-                 req.tv_sec = us / 1000000;
-                 req.tv_nsec = (us % 1000000) * 1000;
+                struct timespec req;
+                req.tv_sec = us / 1000000;
+                req.tv_nsec = (us % 1000000) * 1000;
 
-                 nanosleep(&req, NULL);
-                 break;
-             }
-             default:
-                 cpu->running = false;
-                 cpu->rv = -1;
-                 goto FINAL;
-         }
-         NEXT();
-     }
+                nanosleep(&req, NULL);
+                break;
+            }
+            default:
+                cpu->running = false;
+                cpu->rv = -1;
+                goto FINAL;
+        }
+        NEXT();
+    }
 
 FINAL:
 #undef NEXT
@@ -898,9 +895,9 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
 }
 
 void
-cpu_dump_registers(const CPU *cpu)
-{
-    printf("============================================================= REGISTER =======================================================================\n");
+cpu_dump_registers(const CPU *cpu) {
+    printf(
+        "============================================================= REGISTER =======================================================================\n");
 
     for (int base = 0; base < REG_COUNT; base += 8) {
         printf("R%03d | ", base);
@@ -912,5 +909,6 @@ cpu_dump_registers(const CPU *cpu)
         printf("\n");
     }
 
-    printf("============================================================ DEBUG END =======================================================================\n");
+    printf(
+        "============================================================ DEBUG END =======================================================================\n");
 }

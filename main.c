@@ -9,15 +9,13 @@
 CPU cpu;
 
 static double
-get_time_sec(struct timespec ts)
-{
+get_time_sec(struct timespec ts) {
     return (double) ts.tv_sec + (double) ts.tv_nsec / 1000000000.0;
 }
 
-char*
-read_assembly_file(const char* filepath, size_t *out_size)
-{
-    FILE* file = fopen(filepath, "rb");
+char *
+read_assembly_file(const char *filepath, size_t *out_size) {
+    FILE *file = fopen(filepath, "rb");
     if (!file) {
         fprintf(stderr, "Error: Cannot open file '%s'\n", filepath);
         return NULL;
@@ -33,7 +31,7 @@ read_assembly_file(const char* filepath, size_t *out_size)
         return NULL;
     }
 
-    char* buffer = (char*)malloc(file_size + 1);
+    char *buffer = (char *) malloc(file_size + 1);
     if (!buffer) {
         fprintf(stderr, "Error: Memory allocation failed\n");
         fclose(file);
@@ -41,7 +39,7 @@ read_assembly_file(const char* filepath, size_t *out_size)
     }
 
     size_t read_size = fread(buffer, 1, file_size, file);
-    if (read_size != (size_t)file_size) {
+    if (read_size != (size_t) file_size) {
         fprintf(stderr, "Error: Failed to read file '%s'\n", filepath);
         free(buffer);
         fclose(file);
@@ -59,25 +57,23 @@ read_assembly_file(const char* filepath, size_t *out_size)
 }
 
 void
-print_usage(const char* program_name)
-{
+print_usage(const char *program_name) {
     printf("Usage: %s <assembly_file.asm>\n", program_name);
     printf("\nExample:\n");
     printf("  %s program.asm\n", program_name);
 }
 
 int
-main(int argc, char* argv[])
-{
+main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: No assembly file specified\n");
         print_usage(argv[0]);
         return 1;
     }
 
-    const char* filepath = argv[1];
+    const char *filepath = argv[1];
     size_t file_size = 0;
-    char* assembly = read_assembly_file(filepath, &file_size);
+    char *assembly = read_assembly_file(filepath, &file_size);
 
     if (!assembly) {
         return 1;

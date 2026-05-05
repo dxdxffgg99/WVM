@@ -76,8 +76,7 @@ set_error(AsmContext *ctx,
           AsmErrorType type,
           int line_number,
           const char *line_text,
-          const char *fmt, ...)
-{
+          const char *fmt, ...) {
     if (!ctx) {
         return;
     }
@@ -111,8 +110,7 @@ set_error(AsmContext *ctx,
  * @return Pointer to the newly created AsmContext, or NULL if allocation fails.
  */
 AsmContext *
-asm_create_context(bool debug_mode)
-{
+asm_create_context(bool debug_mode) {
     AsmContext *ctx = (AsmContext *) malloc(sizeof(AsmContext));
 
     if (!ctx) {
@@ -134,8 +132,7 @@ asm_create_context(bool debug_mode)
  * @param ctx Pointer to the AsmContext to free. If NULL, the function does nothing.
  */
 void
-asm_free_context(AsmContext *ctx)
-{
+asm_free_context(AsmContext *ctx) {
     if (ctx) {
         free(ctx);
     }
@@ -150,8 +147,7 @@ asm_free_context(AsmContext *ctx)
  * @return The error message string, or NULL if no context is provided.
  */
 const char *
-asm_get_error_message(AsmContext *ctx)
-{
+asm_get_error_message(AsmContext *ctx) {
     if (!ctx) {
         return NULL;
     }
@@ -168,10 +164,9 @@ asm_get_error_message(AsmContext *ctx)
  * @return String representation of the error type, or "UNKNOWN" if invalid.
  */
 const char *
-asm_get_error_type(AsmErrorType type)
-{
+asm_get_error_type(AsmErrorType type) {
     if (type < 0 ||
-        type >= (int)(sizeof(error_type_strings) / sizeof(error_type_strings[0]))) {
+        type >= (int) (sizeof(error_type_strings) / sizeof(error_type_strings[0]))) {
         return "UNKNOWN";
     }
 
@@ -188,8 +183,7 @@ asm_get_error_type(AsmErrorType type)
  * @return Pointer to the trimmed string (same as input).
  */
 static char *
-trim(char *str)
-{
+trim(char *str) {
     if (!str) {
         return str;
     }
@@ -223,9 +217,8 @@ trim(char *str)
  * @return The register number (0-based), or -1 if parsing fails.
  */
 static int
-parse_register(const char *str)
-{
-    if (!str          ||
+parse_register(const char *str) {
+    if (!str ||
         str[0] != '%' ||
         str[1] != 'r') {
         return -1;
@@ -236,8 +229,8 @@ parse_register(const char *str)
     long value = strtol(&str[2], &end, 10);
 
     if (end == &str[2] ||
-        *end != '\0'   ||
-        value < 0      ||
+        *end != '\0' ||
+        value < 0 ||
         value >= REG_COUNT) {
         return -1;
     }
@@ -261,11 +254,9 @@ static bool
 parse_immediate(const char *str,
                 int64_t *value,
                 AsmContext *ctx,
-                int line_number)
-{
+                int line_number) {
     if (!str ||
-        str[0] != '$')
-    {
+        str[0] != '$') {
         return false;
     }
 
@@ -273,12 +264,11 @@ parse_immediate(const char *str,
     errno = 0;
     long long result = strtoll(&str[1], &end, 0);
 
-    if (end == &str[1]   ||
-        *end != '\0'     ||
+    if (end == &str[1] ||
+        *end != '\0' ||
         (errno == ERANGE &&
-            (result == LLONG_MAX ||
-             result == LLONG_MIN)))
-    {
+         (result == LLONG_MAX ||
+          result == LLONG_MIN))) {
         set_error(ctx, ASM_ERROR_INVALID_IMMEDIATE, line_number, str, "Invalid immediate value '%s'", str);
         return false;
     }
@@ -305,8 +295,7 @@ split_operands(char *input,
                char operands[3][64],
                int *count,
                AsmContext *ctx,
-               int line_number)
-{
+               int line_number) {
     *count = 0;
     char *p = input;
 
@@ -323,8 +312,7 @@ split_operands(char *input,
 
         while (*p != '\0' &&
                *p != ',' &&
-               idx < 63)
-        {
+               idx < 63) {
             operands[*count][idx++] = *p++;
         }
 
@@ -372,7 +360,7 @@ static int
 get_opcode(const char *name) {
     for (int i = 0; op_table[i].name != NULL; i++) {
         if (strcmp(name, op_table[i].name) == 0) {
-            return (int)op_table[i].op;
+            return (int) op_table[i].op;
         }
     }
 
@@ -395,8 +383,7 @@ static bool
 add_symbol(AsmContext *ctx,
            const char *name,
            uint64_t addr,
-           int line_number)
-{
+           int line_number) {
     if (!name || *name == '\0') {
         set_error(ctx, ASM_ERROR_INVALID_SYNTAX, line_number, name, "Invalid symbol name");
         return false;
@@ -487,8 +474,7 @@ encode_instruction(uint8_t opcode,
                    int64_t imm,
                    uint8_t *out,
                    size_t *pos,
-                   size_t max_size)
-{
+                   size_t max_size) {
     size_t size = instruction_size(mode);
     if (out && *pos + size > max_size) {
         return false;
@@ -536,8 +522,7 @@ resolve_operand(AsmContext *ctx,
                 bool *is_imm,
                 bool allow_label,
                 bool require_symbol,
-                int line_number)
-{
+                int line_number) {
     *is_imm = false;
     *imm = 0;
     *reg = 0;
@@ -616,8 +601,7 @@ build_instruction_layout(AsmContext *ctx,
                          uint8_t *src2,
                          int64_t *imm,
                          bool resolve_symbols,
-                         int line_number)
-{
+                         int line_number) {
     *mode = 0;
     *dst = 0;
     *src1 = 0;
@@ -676,8 +660,8 @@ build_instruction_layout(AsmContext *ctx,
                 if (operands[0][0] == '$' || (operands[0][0] != '%' && operands[0][0] != '\0')) {
                     result = resolve_operand(ctx, operands[0], imm, &reg, &is_imm, true, resolve_symbols, line_number);
                     if (!result) {
-                    return false;
-                }
+                        return false;
+                    }
                     if (!is_imm) {
                         set_error(ctx, ASM_ERROR_INVALID_SYNTAX, line_number, operands[0],
                                   "First operand must be immediate or symbol if two operands are used");
@@ -711,8 +695,8 @@ build_instruction_layout(AsmContext *ctx,
                 if (operands[1][0] == '$' || (operands[1][0] != '%' && operands[1][0] != '\0')) {
                     result = resolve_operand(ctx, operands[1], imm, &reg, &is_imm, true, resolve_symbols, line_number);
                     if (!result) {
-                    return false;
-                }
+                        return false;
+                    }
                     if (!is_imm) {
                         set_error(ctx, ASM_ERROR_INVALID_SYNTAX, line_number, operands[1],
                                   "Expected immediate or symbol in second operand");
@@ -832,8 +816,8 @@ build_instruction_layout(AsmContext *ctx,
                 if (operands[1][0] == '$' || (operands[1][0] != '%' && operands[1][0] != '\0')) {
                     result = resolve_operand(ctx, operands[1], imm, &reg, &is_imm, true, resolve_symbols, line_number);
                     if (!result) {
-                    return false;
-                }
+                        return false;
+                    }
                     if (!is_imm) {
                         set_error(ctx, ASM_ERROR_INVALID_SYNTAX, line_number, operands[1],
                                   "CMP second operand must be immediate, symbol, or register");
@@ -1053,8 +1037,7 @@ parse_line(char *line,
            int *operand_count,
            char *label,
            AsmContext *ctx,
-           int line_number)
-{
+           int line_number) {
     *operand_count = 0;
     label[0] = '\0';
 
@@ -1112,8 +1095,7 @@ parse_line(char *line,
 static bool
 first_pass(AsmContext *ctx,
            const char *source,
-           size_t *size_out)
-{
+           size_t *size_out) {
     symbol_count = 0;
     size_t pos = 0;
     char *src_copy = strdup(source);
@@ -1211,8 +1193,7 @@ second_pass(AsmContext *ctx,
             const char *source,
             uint8_t *output,
             size_t max_size,
-            size_t *final_size)
-{
+            size_t *final_size) {
     size_t pos = 0;
     char *src_copy = strdup(source);
 
@@ -1223,7 +1204,7 @@ second_pass(AsmContext *ctx,
     char *saveptr;
     int line_number = 0;
     char *line = strtok_r(src_copy, "\n", &saveptr);
-    
+
     while (line != NULL) {
         line_number++;
         char *line_to_trim = strdup(line);
@@ -1316,9 +1297,8 @@ size_t
 asm_assemble(AsmContext *ctx,
              const char *source,
              uint8_t *output,
-             size_t max_size)
-{
-    if (!(ctx && source)){
+             size_t max_size) {
+    if (!(ctx && source)) {
         return 0;
     }
 
@@ -1366,8 +1346,7 @@ asm_assemble(AsmContext *ctx,
 size_t
 assemble(const char *source,
          uint8_t *output,
-         size_t max_size)
-{
+         size_t max_size) {
     AsmContext *ctx = asm_create_context(false);
 
     if (!ctx) {
