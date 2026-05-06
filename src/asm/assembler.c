@@ -554,7 +554,7 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                         imm = check_imm("SYSCALL", t_op1, &is_imm, line_to_trim, src_copy);
                         if (!is_imm) return 0;
                         mode = ADDR_MODE_IMM;
-                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;`
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
                     } else if (t_op1[0] == '%') {
                         int reg_syscall = check_reg("SYSCALL", t_op1, line_to_trim, src_copy);
                         if (reg_syscall == -1) return 0;
