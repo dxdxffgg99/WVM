@@ -9,6 +9,7 @@ add_executable(wvm
         src/bytecode/opcode.h
         src/cpu/cpu.h
         src/memory/memory.h
+        src/memory/ram/ram.c
         src/memory/ram/ram.h
         src/memory/register/register.h
         src/cpu/cpu.c

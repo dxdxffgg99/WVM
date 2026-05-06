@@ -37,25 +37,7 @@ typedef enum opcode {
     EOPV = 30,
     DEBUG = 31,
     LOOP = 32,
-    ADD_LOOP_IMM = 33,
-    INC_LOOP = 34,
-    DEC_LOOP = 35,
-    CMP_JE_IMM = 36,
-    CMP_JNE_IMM = 37,
-    CMP_JL_IMM = 38,
-    CMP_JG_IMM = 39,
-    CMP_JLE_IMM = 40,
-    CMP_JGE_IMM = 41,
-    MADD = 42,
-    CMP_JE_REG = 43,
-    CMP_JNE_REG = 44,
-    CMP_JL_REG = 45,
-    CMP_JG_REG = 46,
-    CMP_JLE_REG = 47,
-    CMP_JGE_REG = 48,
-    INC_CMP_JL_IMM = 49,
-    MOV_STORE_IMM = 50,
-    SYSCALL = 51
+    SYSCALL = 33
 } opcode_t;
 
 #endif
