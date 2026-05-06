@@ -5,17 +5,57 @@
 
 int64_t run(CPU *cpu) {
     static void *dispatch[] = {
-        &&OP_NOP, &&OP_ADD, &&OP_SUB, &&OP_MUL, &&OP_DIV,
-        &&OP_INC, &&OP_DEC, &&OP_JMP, &&OP_CMP, &&OP_JE,
-        &&OP_JNE, &&OP_JL, &&OP_JG, &&OP_JLE, &&OP_JGE,
-        &&OP_SETZ, &&OP_MOV, &&OP_LSH, &&OP_RSH, &&OP_LOAD,
-        &&OP_STORE, &&OP_OR, &&OP_AND, &&OP_XOR, &&OP_TIME,
-        &&OP_PUSH, &&OP_POP, &&OP_CALL, &&OP_RET, &&OP_EOP,
-        &&OP_EOPV, &&OP_DEBUG, &&OP_LOOP, &&OP_ADD_LOOP_IMM,
-        &&OP_INC_LOOP, &&OP_DEC_LOOP, &&OP_CMP_JE_IMM, &&OP_CMP_JNE_IMM,
-        &&OP_CMP_JL_IMM, &&OP_CMP_JG_IMM, &&OP_CMP_JLE_IMM, &&OP_CMP_JGE_IMM,
-        &&OP_MADD, &&OP_CMP_JE_REG, &&OP_CMP_JNE_REG, &&OP_CMP_JL_REG, &&OP_CMP_JG_REG,
-        &&OP_CMP_JLE_REG, &&OP_CMP_JGE_REG, &&OP_INC_CMP_JL_IMM, &&OP_MOV_STORE_IMM,
+        &&OP_NOP,
+        &&OP_ADD,
+        &&OP_SUB,
+        &&OP_MUL,
+        &&OP_DIV,
+        &&OP_INC,
+        &&OP_DEC,
+        &&OP_JMP,
+        &&OP_CMP,
+        &&OP_JE,
+        &&OP_JNE,
+        &&OP_JL,
+        &&OP_JG,
+        &&OP_JLE,
+        &&OP_JGE,
+        &&OP_SETZ,
+        &&OP_MOV,
+        &&OP_LSH,
+        &&OP_RSH,
+        &&OP_LOAD,
+        &&OP_STORE,
+        &&OP_OR,
+        &&OP_AND,
+        &&OP_XOR,
+        &&OP_TIME,
+        &&OP_PUSH,
+        &&OP_POP,
+        &&OP_CALL,
+        &&OP_RET,
+        &&OP_EOP,
+        &&OP_EOPV,
+        &&OP_DEBUG,
+        &&OP_LOOP,
+        &&OP_ADD_LOOP_IMM,
+        &&OP_INC_LOOP,
+        &&OP_DEC_LOOP,
+        &&OP_CMP_JE_IMM,
+        &&OP_CMP_JNE_IMM,
+        &&OP_CMP_JL_IMM,
+        &&OP_CMP_JG_IMM,
+        &&OP_CMP_JLE_IMM,
+        &&OP_CMP_JGE_IMM,
+        &&OP_MADD,
+        &&OP_CMP_JE_REG,
+        &&OP_CMP_JNE_REG,
+        &&OP_CMP_JL_REG,
+        &&OP_CMP_JG_REG,
+        &&OP_CMP_JLE_REG,
+        &&OP_CMP_JGE_REG,
+        &&OP_INC_CMP_JL_IMM,
+        &&OP_MOV_STORE_IMM,
         &&OP_SYSCALL
     };
 
@@ -772,21 +812,66 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
 
         if (i + 2 < cpu->decoded_size) {
             instr_t *ins3 = &cpu->decoded_program[i + 2];
-            if (ins1->opcode == INC && ins2->opcode == CMP && (ins2->mode & ADDR_MODE_IMM) && ins3->opcode
-                == JL) {
-                if (ins1->dst == ins2->src1 && (ins3->mode & ADDR_MODE_IMM)) {
-                    ins1->opcode = INC_CMP_JL_IMM;
-                    ins1->imm = ins2->imm;
-                    ins1->jump_pci = ins3->jump_pci;
-                    ins1->jump_target = ins3->jump_target;
-                    ins2->opcode = NOP;
-                    ins3->opcode = NOP;
-                    continue;
-                }
+
+            bool is_inc_cmp_jl =
+                    ins1->opcode == INC &&
+                    ins2->opcode == CMP &&
+                    (ins2->mode & ADDR_MODE_IMM) &&
+                    ins3->opcode == JL;
+
+            bool cmp_jl_has_imm =
+                    ins1->dst == ins2->src1 &&
+                    (ins3->mode & ADDR_MODE_IMM);
+
+            if (is_inc_cmp_jl && cmp_jl_has_imm) {
+                ins1->opcode = INC_CMP_JL_IMM;
+                ins1->imm = ins2->imm;
+                ins1->jump_pci = ins3->jump_pci;
+                ins1->jump_target = ins3->jump_target;
+                ins2->opcode = NOP;
+                ins3->opcode = NOP;
+                continue;
             }
         }
 
-        if (ins1->opcode == ADD && (ins1->mode & ADDR_MODE_IMM) && ins2->opcode == LOOP) {
+        bool is_add_loop =
+                ins1->opcode == ADD &&
+                (ins1->mode & ADDR_MODE_IMM) &&
+                ins2->opcode == LOOP;
+
+        bool is_inc_loop =
+                ins1->opcode == INC &&
+                ins2->opcode == LOOP;
+
+        bool is_dec_loop =
+                ins1->opcode == DEC &&
+                ins2->opcode == LOOP;
+
+        bool is_cmp_imm_jump =
+                ins1->opcode == CMP &&
+                (ins1->mode & ADDR_MODE_IMM) &&
+                ins2->opcode >= JE &&
+                ins2->opcode <= JGE;
+
+        bool is_cmp_reg_jump =
+                ins1->opcode == CMP &&
+                !(ins1->mode & ADDR_MODE_IMM) &&
+                ins2->opcode >= JE &&
+                ins2->opcode <= JGE;
+
+        bool is_mov_store_imm =
+                ins1->opcode == MOV &&
+                (ins1->mode & ADDR_MODE_IMM) &&
+                ins2->opcode == STORE &&
+                !(ins2->mode & ADDR_MODE_IMM);
+
+        bool is_mul_add =
+                ins1->opcode == MUL &&
+                ins2->opcode == ADD &&
+                !(ins1->mode & ADDR_MODE_IMM) &&
+                !(ins2->mode & ADDR_MODE_IMM);
+
+        if (is_add_loop) {
             if (ins2->jump_pci == (int32_t) i) {
                 ins1->opcode = ADD_LOOP_IMM;
                 ins1->src2 = ins2->dst;
@@ -794,7 +879,7 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
                 ins1->jump_target = ins2->jump_target;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == INC && ins2->opcode == LOOP) {
+        } else if (is_inc_loop) {
             if (ins2->jump_pci == (int32_t) i) {
                 ins1->opcode = INC_LOOP;
                 ins1->src2 = ins2->dst;
@@ -802,7 +887,7 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
                 ins1->jump_target = ins2->jump_target;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == DEC && ins2->opcode == LOOP) {
+        } else if (is_dec_loop) {
             if (ins2->jump_pci == (int32_t) i) {
                 ins1->opcode = DEC_LOOP;
                 ins1->src2 = ins2->dst;
@@ -810,33 +895,33 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
                 ins1->jump_target = ins2->jump_target;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == CMP && (ins1->mode & ADDR_MODE_IMM) && (
-                       ins2->opcode >= JE && ins2->opcode <= JGE)) {
+        } else if (is_cmp_imm_jump) {
             if (ins2->mode & ADDR_MODE_IMM) {
                 ins1->opcode = CMP_JE_IMM + (ins2->opcode - JE);
                 ins1->jump_pci = ins2->jump_pci;
                 ins1->jump_target = ins2->jump_target;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == CMP && !(ins1->mode & ADDR_MODE_IMM) && (
-                       ins2->opcode >= JE && ins2->opcode <= JGE)) {
+        } else if (is_cmp_reg_jump) {
             if (ins2->mode & ADDR_MODE_IMM) {
                 ins1->opcode = CMP_JE_REG + (ins2->opcode - JE);
                 ins1->jump_pci = ins2->jump_pci;
                 ins1->jump_target = ins2->jump_target;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == MOV && (ins1->mode & ADDR_MODE_IMM) && ins2->opcode == STORE && !(
-                       ins2->mode & ADDR_MODE_IMM)) {
+        } else if (is_mov_store_imm) {
             if (ins1->dst == ins2->dst) {
                 ins1->opcode = MOV_STORE_IMM;
                 ins1->src2 = ins2->src2;
                 ins2->opcode = NOP;
             }
-        } else if (ins1->opcode == MUL && ins2->opcode == ADD && !(ins1->mode & ADDR_MODE_IMM) && !(
-                       ins2->mode & ADDR_MODE_IMM)) {
+        } else if (is_mul_add) {
             if (ins1->dst == ins2->dst) {
-                if (ins1->src1 == ins1->dst && ins2->src1 == ins2->dst) {
+                bool is_madd_pattern =
+                        ins1->src1 == ins1->dst &&
+                        ins2->src1 == ins2->dst;
+
+                if (is_madd_pattern) {
                     ins1->opcode = MADD;
                     ins1->src1 = ins1->src2;
                     ins1->src2 = ins2->src2;
@@ -848,12 +933,7 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
 }
 
 void cpu_dump_registers(const CPU *cpu) {
-    printf(
-        "\n==============================================================================================================================================\n");
-    printf(
-        "============================================================= REGISTER =======================================================================\n");
-    printf(
-        "==============================================================================================================================================\n");
+    printf("============================================================= REGISTER ============================================================================\n");
 
     for (int base = 0; base < REG_COUNT; base += 8) {
         printf("R%03d | ", base);
@@ -863,10 +943,5 @@ void cpu_dump_registers(const CPU *cpu) {
         printf("\n");
     }
 
-    printf(
-        "==============================================================================================================================================\n");
-    printf(
-        "============================================================ DEBUG END =======================================================================\n");
-    printf(
-        "==============================================================================================================================================\n");
+    printf("============================================================ DEBUG END ============================================================================\n");
 }

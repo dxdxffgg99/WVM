@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 typedef struct {
     const char *name;
@@ -12,40 +13,40 @@ typedef struct {
 } OpMapping;
 
 static const OpMapping op_table[] = {
-    {"nop", NOP},
     {"add", ADD},
-    {"sub", SUB},
-    {"mul", MUL},
-    {"div", DIV},
-    {"inc", INC},
-    {"dec", DEC},
-    {"jmp", JMP},
-    {"cmp", CMP},
-    {"je", JE},
-    {"jne", JNE},
-    {"jl", JL},
-    {"jg", JG},
-    {"jle", JLE},
-    {"jge", JGE},
-    {"setz", SETZ},
-    {"mov", MOV},
-    {"lsh", LSH},
-    {"rsh", RSH},
-    {"load", LOAD},
-    {"store", STORE},
-    {"or", OR},
     {"and", AND},
-    {"xor", XOR},
-    {"time", TIME},
-    {"push", PUSH},
-    {"pop", POP},
     {"call", CALL},
-    {"ret", RET},
+    {"cmp", CMP},
+    {"debug", DEBUG},
+    {"dec", DEC},
+    {"div", DIV},
     {"eop", EOP},
     {"eopv", EOPV},
-    {"debug", DEBUG},
+    {"inc", INC},
+    {"je", JE},
+    {"jge", JGE},
+    {"jg", JG},
+    {"jl", JL},
+    {"jle", JLE},
+    {"jmp", JMP},
+    {"jne", JNE},
+    {"load", LOAD},
     {"loop", LOOP},
+    {"lsh", LSH},
+    {"mov", MOV},
+    {"mul", MUL},
+    {"nop", NOP},
+    {"or", OR},
+    {"pop", POP},
+    {"push", PUSH},
+    {"ret", RET},
+    {"rsh", RSH},
+    {"setz", SETZ},
+    {"store", STORE},
+    {"sub", SUB},
     {"syscall", SYSCALL},
+    {"time", TIME},
+    {"xor", XOR},
     {NULL, NOP}
 };
 
@@ -84,20 +85,22 @@ static int get_opcode(const char *name) {
 }
 
 static int parse_register(const char *str) {
-    if (str[0] != '%') return -1;
-    if (str[1] == 'r') {
-        return atoi(&str[2]);
-    }
-    return -1;
+    if (str[0] != '%' || str[1] != 'r' || !isdigit((unsigned char)str[2])) return -1;
+    char *endptr;
+    long reg = strtol(&str[2], &endptr, 10);
+    if (*endptr != '\0' || reg < 0 || reg > 255) return -1;
+    return (int) reg;
 }
 
 static int64_t parse_immediate(const char *str, bool *is_imm) {
-    if (str[0] == '$') {
-        *is_imm = true;
-        return strtoll(&str[1], NULL, 0);
-    }
     *is_imm = false;
-    return 0;
+    if (str[0] != '$') return 0;
+    errno = 0;
+    char *endptr;
+    int64_t imm = strtoll(&str[1], &endptr, 0);
+    if (errno != 0 || *endptr != '\0') return 0;
+    *is_imm = true;
+    return imm;
 }
 
 static void encode_instruction(uint8_t opcode, uint8_t mode, uint8_t dst, uint8_t src1, uint8_t src2, int64_t imm,
@@ -134,12 +137,21 @@ static char *trim(char *str) {
 size_t assemble(const char *source, uint8_t *output, size_t max_size) {
     symbol_count = 0;
     char *src_copy = strdup(source);
+    if (!src_copy) {
+        fprintf(stderr, "Error: Memory allocation failed for source copy\n");
+        return 0;
+    }
     size_t pos = 0;
 
     char *saveptr;
     char *line = strtok_r(src_copy, "\n", &saveptr);
     while (line != NULL) {
         char *line_to_trim = strdup(line);
+        if (!line_to_trim) {
+            fprintf(stderr, "Error: Memory allocation failed for line copy\n");
+            free(src_copy);
+            return 0;
+        }
         char *comment_start = strchr(line_to_trim, '#');
         if (comment_start) *comment_start = '\0';
         char *trimmed = trim(line_to_trim);
@@ -152,7 +164,14 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
         char *colon = strchr(trimmed, ':');
         if (colon) {
             *colon = '\0';
-            add_symbol(trim(trimmed), pos);
+            char *label = trim(trimmed);
+            if (symbol_count >= MAX_SYMBOLS) {
+                fprintf(stderr, "Error: Symbol table overflow, maximum %d symbols allowed\n", MAX_SYMBOLS);
+                free(line_to_trim);
+                free(src_copy);
+                return 0;
+            }
+            add_symbol(label, pos);
             trimmed = trim(colon + 1);
             if (*trimmed == '\0') {
                 free(line_to_trim);
@@ -166,27 +185,35 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
         int count = sscanf(trimmed, "%31s %63[^,], %63[^,], %63s", instr, op1, op2, op3);
         if (count >= 1) {
             int op = get_opcode(instr);
-            if (op != -1) {
-                uint8_t mode = 0;
-                char *ops[3] = {trim(op1), trim(op2), trim(op3)};
-                for (int i = 0; i < 3; i++) {
-                    if (ops[i][0] == '$') {
-                        bool is_imm;
-                        int64_t imm = parse_immediate(ops[i], &is_imm);
-                        if (is_imm) {
-                            mode |= ADDR_MODE_IMM;
-                            if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
-                                mode |= ADDR_MODE_IMM8;
-                        }
-                        break;
-                    } else if (ops[i][0] != '\0' && ops[i][0] != '%' &&
-                               op != NOP && op != RET && op != EOP) {
-                        mode |= ADDR_MODE_IMM;
-                        break;
-                    }
-                }
-                encode_instruction((uint8_t) op, mode, 0, 0, 0, 0, NULL, &pos);
+            if (op == -1) {
+                fprintf(stderr, "Error: Unknown opcode '%s'\n", instr);
+                free(line_to_trim);
+                free(src_copy);
+                return 0;
             }
+            uint8_t mode = 0;
+            char *ops[3] = {trim(op1), trim(op2), trim(op3)};
+            for (int i = 0; i < 3; i++) {
+                if (ops[i][0] == '$') {
+                    bool is_imm;
+                    int64_t imm = parse_immediate(ops[i], &is_imm);
+                    if (!is_imm) {
+                        fprintf(stderr, "Error: Invalid immediate value '%s'\n", ops[i]);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    mode |= ADDR_MODE_IMM;
+                    if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
+                        mode |= ADDR_MODE_IMM8;
+                    break;
+                } else if (ops[i][0] != '\0' && ops[i][0] != '%' &&
+                           op != NOP && op != RET && op != EOP) {
+                    mode |= ADDR_MODE_IMM;
+                    break;
+                }
+            }
+            encode_instruction((uint8_t) op, mode, 0, 0, 0, 0, NULL, &pos);
         }
         free(line_to_trim);
         line = strtok_r(NULL, "\n", &saveptr);
@@ -194,10 +221,19 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
     free(src_copy);
 
     src_copy = strdup(source);
+    if (!src_copy) {
+        fprintf(stderr, "Error: Memory allocation failed for second source copy\n");
+        return 0;
+    }
     size_t final_pos = 0;
     line = strtok_r(src_copy, "\n", &saveptr);
     while (line != NULL) {
         char *line_to_trim = strdup(line);
+        if (!line_to_trim) {
+            fprintf(stderr, "Error: Memory allocation failed for line copy in second pass\n");
+            free(src_copy);
+            return 0;
+        }
         char *comment_start = strchr(line_to_trim, '#');
         if (comment_start) *comment_start = '\0';
         char *trimmed = trim(line_to_trim);
@@ -235,12 +271,33 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case MOV:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in MOV\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        dst = (uint8_t) parse_register(t_op2);
+                        int reg = parse_register(t_op2);
+                        if (reg == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in MOV\n", t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        dst = (uint8_t) reg;
                     } else {
-                        src1 = (uint8_t) parse_register(t_op1);
-                        dst = (uint8_t) parse_register(t_op2);
+                        int reg1 = parse_register(t_op1);
+                        int reg2 = parse_register(t_op2);
+                        if (reg1 == -1 || reg2 == -1) {
+                            fprintf(stderr, "Error: Invalid register(s) '%s', '%s' in MOV\n", t_op1, t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg1;
+                        dst = (uint8_t) reg2;
                     }
                     break;
                 case ADD:
@@ -254,41 +311,115 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case RSH:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s'\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        dst = (uint8_t) parse_register(t_op2);
+                        int reg = parse_register(t_op2);
+                        if (reg == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s'\n", t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        dst = (uint8_t) reg;
                         src1 = dst;
                     } else if (count == 3) {
-                        src2 = (uint8_t) parse_register(t_op1);
-                        dst = (uint8_t) parse_register(t_op2);
+                        int reg1 = parse_register(t_op1);
+                        int reg2 = parse_register(t_op2);
+                        if (reg1 == -1 || reg2 == -1) {
+                            fprintf(stderr, "Error: Invalid register(s) '%s', '%s'\n", t_op1, t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src2 = (uint8_t) reg1;
+                        dst = (uint8_t) reg2;
                         src1 = dst;
                     } else if (count == 4) {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg1 = parse_register(t_op1);
+                        if (reg1 == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s'\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg1;
                         if (t_op2[0] == '$') {
                             imm = parse_immediate(t_op2, &is_imm);
+                            if (!is_imm) {
+                                fprintf(stderr, "Error: Invalid immediate value '%s'\n", t_op2);
+                                free(line_to_trim);
+                                free(src_copy);
+                                return 0;
+                            }
                             mode = ADDR_MODE_IMM;
                             if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
                                 mode |= ADDR_MODE_IMM8;
                         } else {
-                            src2 = (uint8_t) parse_register(t_op2);
+                            int reg2 = parse_register(t_op2);
+                            if (reg2 == -1) {
+                                fprintf(stderr, "Error: Invalid register '%s'\n", t_op2);
+                                free(line_to_trim);
+                                free(src_copy);
+                                return 0;
+                            }
+                            src2 = (uint8_t) reg2;
                         }
-                        dst = (uint8_t) parse_register(t_op3);
+                        int reg3 = parse_register(t_op3);
+                        if (reg3 == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s'\n", t_op3);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        dst = (uint8_t) reg3;
                     }
                     break;
                 case INC:
                 case DEC:
-                    dst = (uint8_t) parse_register(t_op1);
+                    int reg_inc = parse_register(t_op1);
+                    if (reg_inc == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s' in INC/DEC\n", t_op1);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    dst = (uint8_t) reg_inc;
                     break;
                 case JMP:
                 case CALL:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in JMP/CALL\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else if (t_op1[0] == '%') {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg = parse_register(t_op1);
+                        if (reg == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in JMP/CALL\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg;
                         src2 = src1;
                     } else {
                         imm = find_symbol(t_op1);
+                        if (imm == -1) {
+                            fprintf(stderr, "Error: Undefined symbol '%s' in JMP/CALL\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     }
                     break;
@@ -301,66 +432,185 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case LOOP:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in jump\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else {
                         imm = find_symbol(t_op1);
+                        if (imm == -1) {
+                            fprintf(stderr, "Error: Undefined symbol '%s' in jump\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     }
-                    dst = (uint8_t) parse_register(t_op2);
+                    int reg_jump = parse_register(t_op2);
+                    if (reg_jump == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s' in jump\n", t_op2);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    dst = (uint8_t) reg_jump;
                     src1 = dst;
                     break;
                 case CMP:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in CMP\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        src1 = (uint8_t) parse_register(t_op2);
+                        int reg = parse_register(t_op2);
+                        if (reg == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in CMP\n", t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg;
                     } else {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg1 = parse_register(t_op1);
+                        if (reg1 == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in CMP\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg1;
                         if (t_op2[0] == '$') {
                             imm = parse_immediate(t_op2, &is_imm);
+                            if (!is_imm) {
+                                fprintf(stderr, "Error: Invalid immediate value '%s' in CMP\n", t_op2);
+                                free(line_to_trim);
+                                free(src_copy);
+                                return 0;
+                            }
                             mode = ADDR_MODE_IMM;
                             if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
                                 mode |= ADDR_MODE_IMM8;
                         } else {
-                            src2 = (uint8_t) parse_register(t_op2);
+                            int reg2 = parse_register(t_op2);
+                            if (reg2 == -1) {
+                                fprintf(stderr, "Error: Invalid register '%s' in CMP\n", t_op2);
+                                free(line_to_trim);
+                                free(src_copy);
+                                return 0;
+                            }
+                            src2 = (uint8_t) reg2;
                         }
                     }
                     break;
                 case LOAD:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in LOAD\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg = parse_register(t_op1);
+                        if (reg == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in LOAD\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg;
                     }
-                    dst = (uint8_t) parse_register(t_op2);
+                    int reg_load_dst = parse_register(t_op2);
+                    if (reg_load_dst == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s' in LOAD\n", t_op2);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    dst = (uint8_t) reg_load_dst;
                     break;
                 case STORE:
-                    src1 = (uint8_t) parse_register(t_op1);
+                    int reg_store_src = parse_register(t_op1);
+                    if (reg_store_src == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s' in STORE\n", t_op1);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    src1 = (uint8_t) reg_store_src;
                     if (t_op2[0] == '$') {
                         imm = parse_immediate(t_op2, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in STORE\n", t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else {
-                        src2 = (uint8_t) parse_register(t_op2);
+                        int reg2 = parse_register(t_op2);
+                        if (reg2 == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in STORE\n", t_op2);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src2 = (uint8_t) reg2;
                     }
                     dst = src1;
                     break;
                 case PUSH:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in PUSH\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg_push = parse_register(t_op1);
+                        if (reg_push == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in PUSH\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg_push;
                     }
                     break;
                 case POP:
-                    dst = (uint8_t) parse_register(t_op1);
+                    int reg_pop_dst = parse_register(t_op1);
+                    if (reg_pop_dst == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s' in POP\n", t_op1);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    dst = (uint8_t) reg_pop_dst;
                     break;
                 case SETZ:
                 case TIME:
                 case DEBUG:
-                    dst = (uint8_t) parse_register(t_op1);
+                    int reg_set_dst = parse_register(t_op1);
+                    if (reg_set_dst == -1) {
+                        fprintf(stderr, "Error: Invalid register '%s'\n", t_op1);
+                        free(line_to_trim);
+                        free(src_copy);
+                        return 0;
+                    }
+                    dst = (uint8_t) reg_set_dst;
                     break;
                 case RET:
                 case EOP:
@@ -368,24 +618,60 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case EOPV:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in EOPV\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                     } else {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg_eopv = parse_register(t_op1);
+                        if (reg_eopv == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in EOPV\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg_eopv;
                     }
                     break;
                 case SYSCALL:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in SYSCALL\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
                     } else if (t_op1[0] == '%') {
-                        src1 = (uint8_t) parse_register(t_op1);
+                        int reg_syscall = parse_register(t_op1);
+                        if (reg_syscall == -1) {
+                            fprintf(stderr, "Error: Invalid register '%s' in SYSCALL\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        src1 = (uint8_t) reg_syscall;
                     }
                     break;
                 default: break;
             }
 
-            if (output && final_pos + INSTR_MAX_SIZE <= max_size) {
+            size_t instr_size = 5;
+            if (mode & ADDR_MODE_IMM) {
+                instr_size += (mode & ADDR_MODE_IMM8) ? 8 : 4;
+            }
+            if (output && final_pos + instr_size > max_size) {
+                fprintf(stderr, "Error: Output buffer overflow, required size %zu, max size %zu\n", final_pos + instr_size, max_size);
+                free(line_to_trim);
+                free(src_copy);
+                return 0;
+            }
+            if (output && final_pos + instr_size <= max_size) {
                 encode_instruction((uint8_t) op, mode, dst, src1, src2, imm, output, &final_pos);
             } else if (!output) {
                 encode_instruction((uint8_t) op, mode, dst, src1, src2, imm, NULL, &final_pos);
