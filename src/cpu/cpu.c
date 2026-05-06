@@ -648,7 +648,7 @@ void cpu_dump_registers(const CPU *cpu) {
     printf("============================================================= REGISTER ============================================================================\n");
 
     for (int base = 0; base < REG_COUNT; base += 8) {
-        printf("R%03d | ", base);
+        printf("R%02d | ", base);
         for (int i = 0; i < 8 && (base + i) < REG_COUNT; i++) {
             printf("%16ld ", reg_read(&cpu->regs, (uint64_t) (base + i)));
         }
