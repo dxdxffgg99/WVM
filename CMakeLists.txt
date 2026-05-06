@@ -4,6 +4,8 @@ project(wvm C)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+add_compile_options(-Wall -Wextra -Wpedantic)
+
 add_executable(wvm
         main.c
         src/bytecode/opcode.h

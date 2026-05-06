@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <time.h>
 
+_Pragma("GCC diagnostic push")
+_Pragma("GCC diagnostic ignored \"-Wpedantic\"")
+
 int64_t run(CPU *cpu) {
     static void *dispatch[] = {
         &&OP_NOP,
@@ -324,6 +327,7 @@ OP_LOOP: {
 
 OP_SYSCALL: {
          const int64_t syscall_num = GET_SRC1;
+
          switch (syscall_num) {
              case 0:
                  if (m_regs->stack_pointer < 8) {
@@ -352,24 +356,30 @@ OP_SYSCALL: {
                      printf("%c", (char)ch);
                  } else if (ch >= 128 && ch <= 0x7FF) {
                      char utf8[3];
+
                      utf8[0] = (char)(0xC0 | (ch >> 6));
                      utf8[1] = (char)(0x80 | (ch & 0x3F));
                      utf8[2] = '\0';
+
                      printf("%s", utf8);
                  } else if (ch >= 0x800 && ch <= 0xFFFF) {
                      char utf8[4];
+
                      utf8[0] = (char)(0xE0 | (ch >> 12));
                      utf8[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
                      utf8[2] = (char)(0x80 | (ch & 0x3F));
                      utf8[3] = '\0';
+
                      printf("%s", utf8);
                  } else if (ch >= 0x10000 && ch <= 0x10FFFF) {
                      char utf8[5];
+
                      utf8[0] = (char)(0xF0 | (ch >> 18));
                      utf8[1] = (char)(0x80 | ((ch >> 12) & 0x3F));
                      utf8[2] = (char)(0x80 | ((ch >> 6) & 0x3F));
                      utf8[3] = (char)(0x80 | (ch & 0x3F));
                      utf8[4] = '\0';
+
                      printf("%s", utf8);
                  }
                  break;
@@ -388,17 +398,21 @@ OP_SYSCALL: {
              case 5: {
                  uint64_t addr = READ_REG(1);
                  int64_t val = READ_REG(2);
+
                  CHECK_MEM(addr, 8);
+
                  *(int64_t *)&m_ram_data[addr] = val;
+
                  break;
              }
              case 6: {
-                 int ch = getchar();
-                 WRITE_REG(0, (int64_t)ch);
+                 WRITE_REG(0, (int64_t)getchar());
+
                  break;
              }
              case 9: {
                  printf("\n");
+
                  break;
              }
              case 10: {
@@ -407,52 +421,64 @@ OP_SYSCALL: {
              }
              case 11: {
                  int64_t val = READ_REG(0);
+
                  printf("%ld (0x%lx)\n", val, val);
+
                  break;
              }
+
              case 12: {
-                 printf("Hex: 0x%lx\n", READ_REG(0));
+                 printf("%lx\n", READ_REG(0));
+
                  break;
              }
              case 13: {
-                 printf("Binary: ");
                  int64_t val = READ_REG(0);
+
                  for (int i = 63; i >= 0; i--) {
                      printf("%d", (int)((val >> i) & 1));
                  }
+
                  printf("\n");
+
                  break;
              }
              case 14: {
                  printf("RAM Size: %lu bytes\n", cpu->ram.size);
                  printf("Stack Pointer: %lu\n", regs->stack_pointer);
+
                  break;
              }
              case 15: {
                  uint64_t dest = READ_REG(1);
                  uint64_t src = READ_REG(2);
                  int64_t len = READ_REG(3);
+
                  if (len < 0) {
                      cpu->running = false;
                      cpu->rv = -1;
                      goto FINAL;
                  }
+
                  CHECK_MEM(dest, (size_t)len);
                  CHECK_MEM(src, (size_t)len);
                  memcpy(&m_ram_data[dest], &ram_data[src], (size_t)len);
+
                  break;
              }
              case 16: {
                  uint64_t addr = READ_REG(1);
-                 int64_t val = READ_REG(2);
                  int64_t len = READ_REG(3);
+
                  if (len < 0) {
                      cpu->running = false;
                      cpu->rv = -1;
                      goto FINAL;
                  }
+
                  CHECK_MEM(addr, (size_t)len);
-                 memset(&m_ram_data[addr], (int)val, (size_t)len);
+                 memset(&m_ram_data[addr], (int)READ_REG(2), (size_t)len);
+
                  break;
              }
              case 17: {
@@ -485,6 +511,8 @@ FINAL:
 
     return cpu->rv;
 }
+
+_Pragma("GCC diagnostic pop")
 
 bool instr_decode(const uint8_t *buffer, size_t limit, instr_t *instr) {
     if (limit < INSTR_MIN_SIZE) return false;
