@@ -316,7 +316,7 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
                         int reg = parse_register(t_op2);
                         if (reg == -1) {
-                            fprintf(stderr, "Error: Invalid register '%s'\n", t_op2);
+                            fprintf(stderr, "Error: Invalid register '%s' in MOV\n", t_op2);
                             free(line_to_trim);
                             free(src_copy);
                             return 0;
@@ -424,6 +424,26 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case JG:
                 case JLE:
                 case JGE:
+                    if (t_op1[0] == '$') {
+                        imm = parse_immediate(t_op1, &is_imm);
+                        if (!is_imm) {
+                            fprintf(stderr, "Error: Invalid immediate value '%s' in jump\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        mode = ADDR_MODE_IMM;
+                    } else {
+                        imm = find_symbol(t_op1);
+                        if (imm == -1) {
+                            fprintf(stderr, "Error: Undefined symbol '%s' in jump\n", t_op1);
+                            free(line_to_trim);
+                            free(src_copy);
+                            return 0;
+                        }
+                        mode = ADDR_MODE_IMM;
+                    }
+                    break;
                 case LOOP:
                     if (t_op1[0] == '$') {
                         imm = parse_immediate(t_op1, &is_imm);
