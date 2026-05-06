@@ -25,6 +25,4 @@ syscall $3
 
 syscall $9
 
-syscall $9
-
 eop

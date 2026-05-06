@@ -124,7 +124,7 @@ main(int argc, char *argv[])
     uint8_t program[4096];
     struct timespec start, end;
 
-    printf("\x1b[92m\x1b[1m┌─═══[Assemble start  ]═══─┐\n\x1b[0m");
+    printf("\x1b[92m\x1b[1m┌─═══[Assemble start ]═══─┐\n\x1b[0m");
 
     clock_gettime(CLOCK_MONOTONIC, &start);
         size_t size = assemble(assembly, program, sizeof(program));
@@ -140,11 +140,11 @@ main(int argc, char *argv[])
 
     printf("Assemble Success\n");
 
-    printf("\x1b[92m\x1b[1m└─═══[Assemble finish ]═══─┘\n\x1b[0m\n");
+    printf("\x1b[92m\x1b[1m└─═══[Assemble finish]═══─┘\n\x1b[0m\n");
 
     load_program(&cpu, program, size);
 
-    printf("\x1b[92m\x1b[1m┌─═══[ VM start  ]═══─┐\n\x1b[0m");
+    printf("\x1b[92m\x1b[1m┌─═══[VM start   ]═══─┐\n\x1b[0m");
 
     clock_gettime(CLOCK_MONOTONIC, &start);
         const int64_t rv = run(&cpu);
