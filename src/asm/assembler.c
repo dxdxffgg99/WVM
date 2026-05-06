@@ -7,11 +7,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-typedef struct {
-    const char *name;
-    opcode_t op;
-} OpMapping;
-
 static const OpMapping op_table[] = {
     {"add", ADD},
     {"and", AND},
