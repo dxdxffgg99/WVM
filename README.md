@@ -20,15 +20,15 @@ make
 ```
 The executable is generated as `wvm`.
 
-this project is tested on Linux 7.0.3-arch1-2, Ubuntu-latest.
-computed goto is not supported on MSVC so this program may not work on Windows.
+This project is tested on Linux 7.0.3-arch1-2, Ubuntu-latest.
+
+Computed goto is not supported on MSVC so this program may not work on Windows.
 
 ## Running a Program
 
 A simple example program is embedded in `main.c`.  
 It demonstrates the assembly syntax and prints execution time.
-```
-bash
+```bash
 ./wvm
 ```
 Output will include:

@@ -7,12 +7,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 add_executable(wvm
         main.c
         src/bytecode/opcode.h
+        src/cpu/cpu.c
         src/cpu/cpu.h
         src/memory/memory.h
         src/memory/ram/ram.c
         src/memory/ram/ram.h
         src/memory/register/register.h
-        src/cpu/cpu.c
         src/asm/assembler.h
         src/asm/assembler.c
         src/wvm.h
