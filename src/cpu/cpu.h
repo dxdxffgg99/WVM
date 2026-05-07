@@ -15,17 +15,18 @@ typedef uint8_t reg_addr_t;
 typedef uint64_t ram_addr_t;
 
 typedef struct instr_s {
+    void *handler;
+    struct instr_s *jump_target;
+    int64_t imm;
+    uint64_t addr;
+    int32_t jump_pci;
     uint8_t opcode;
     uint8_t mode;
     uint8_t dst;
     uint8_t src1;
     uint8_t src2;
-    int64_t imm;
     uint8_t size;
-    uint64_t addr;
-    int32_t jump_pci;
-    void *handler;
-    struct instr_s *jump_target;
+    uint8_t padding[2];
 } instr_t;
 
 typedef struct {

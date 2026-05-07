@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 project(wvm C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -flto")
+set(CMAKE_C_FLAGS_DEBUG "-O3 -march=native")
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 

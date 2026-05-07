@@ -10,89 +10,99 @@ _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
 
 int64_t run(CPU *cpu) {
     static void *dispatch[] = {
-        &&OP_NOP,
-        &&OP_ADD,
-        &&OP_SUB,
-        &&OP_MUL,
-        &&OP_DIV,
-        &&OP_INC,
-        &&OP_DEC,
-        &&OP_JMP,
-        &&OP_CMP,
-        &&OP_JE,
-        &&OP_JNE,
-        &&OP_JL,
-        &&OP_JG,
-        &&OP_JLE,
-        &&OP_JGE,
-        &&OP_SETZ,
-        &&OP_MOV,
-        &&OP_LSH,
-        &&OP_RSH,
-        &&OP_LOAD,
-        &&OP_STORE,
-        &&OP_OR,
-        &&OP_AND,
-        &&OP_XOR,
-        &&OP_TIME,
-        &&OP_PUSH,
-        &&OP_POP,
-        &&OP_CALL,
-        &&OP_RET,
-        &&OP_EOP,
-        &&OP_EOPV,
-        &&OP_DEBUG,
-        &&OP_LOOP,
-        &&OP_SYSCALL
+        [NOP] = &&OP_NOP,
+        [ADD] = &&OP_ADD,
+        [SUB] = &&OP_SUB,
+        [MUL] = &&OP_MUL,
+        [DIV] = &&OP_DIV,
+        [INC] = &&OP_INC,
+        [DEC] = &&OP_DEC,
+        [JMP] = &&OP_JMP,
+        [CMP] = &&OP_CMP,
+        [JE] = &&OP_JE,
+        [JNE] = &&OP_JNE,
+        [JL] = &&OP_JL,
+        [JG] = &&OP_JG,
+        [JLE] = &&OP_JLE,
+        [JGE] = &&OP_JGE,
+        [SETZ] = &&OP_SETZ,
+        [MOV] = &&OP_MOV,
+        [LSH] = &&OP_LSH,
+        [RSH] = &&OP_RSH,
+        [LOAD] = &&OP_LOAD,
+        [STORE] = &&OP_STORE,
+        [OR] = &&OP_OR,
+        [AND] = &&OP_AND,
+        [XOR] = &&OP_XOR,
+        [TIME] = &&OP_TIME,
+        [PUSH] = &&OP_PUSH,
+        [POP] = &&OP_POP,
+        [CALL] = &&OP_CALL,
+        [RET] = &&OP_RET,
+        [EOP] = &&OP_EOP,
+        [EOPV] = &&OP_EOPV,
+        [DEBUG] = &&OP_DEBUG,
+        [LOOP] = &&OP_LOOP,
+        [SYSCALL] = &&OP_SYSCALL
     };
 
     if (!cpu->isThreaded) {
+        static void *dispatch_imm[] = {
+            [ADD] = &&OP_ADD_IMM,
+            [SUB] = &&OP_SUB_IMM,
+            [MUL] = &&OP_MUL_IMM,
+            [DIV] = &&OP_DIV_IMM,
+            [CMP] = &&OP_CMP_IMM,
+            [MOV] = &&OP_MOV_IMM,
+            [LSH] = &&OP_LSH_IMM,
+            [RSH] = &&OP_RSH_IMM,
+            [OR] = &&OP_OR_IMM,
+            [AND] = &&OP_AND_IMM,
+            [XOR] = &&OP_XOR_IMM,
+            [PUSH] = &&OP_PUSH_IMM,
+            [LOAD] = &&OP_LOAD_IMM,
+            [STORE] = &&OP_STORE_IMM,
+            [CALL] = &&OP_CALL_IMM
+        };
+
         for (ram_addr_t i = 0; i < cpu->decodedSize; i++) {
-            cpu->decodedProgram[i].handler = dispatch[cpu->decodedProgram[i].opcode];
+            instr_t *ins = &cpu->decodedProgram[i];
+            if ((ins->mode & ADDR_MODE_IMM) && dispatch_imm[ins->opcode]) {
+                ins->handler = dispatch_imm[ins->opcode];
+            } else {
+                ins->handler = dispatch[ins->opcode];
+            }
         }
         cpu->isThreaded = true;
     }
 
     cpu->running = true;
 
-    instr_t *p_ins = &cpu->decodedProgram[0];
-    const Registers *regs = &cpu->regs;
-    Registers *m_regs = &cpu->regs;
+    register instr_t *p_ins = &cpu->decodedProgram[0];
+    register int64_t *const regs = cpu->regs.registers;
+    Registers *const m_regs = &cpu->regs;
     const uint8_t *ram_data = cpu->ram.data;
     uint8_t *m_ram_data = cpu->ram.data;
 
 #define NEXT() do { \
     p_ins++; \
-    if (p_ins >= cpu->decodedProgram + cpu->decodedSize) { \
-        cpu->running = false; \
-        cpu->returnValue = 0; \
-        goto FINAL; \
-    } \
     goto *p_ins->handler; \
 } while (0)
 
 #define JUMP(target_addr) do { \
-    if (p_ins->jump_target) { \
-        p_ins = p_ins->jump_target; \
-    } else { \
-        uint64_t _addr = (target_addr); \
-        ram_addr_t _pci = 0; \
-        while (_pci < cpu->decodedSize && cpu->decodedProgram[_pci].addr < _addr) { \
-            _pci++; \
-        } \
-        p_ins = &cpu->decodedProgram[_pci]; \
-    } \
+    p_ins = p_ins->jump_target; \
     goto *p_ins->handler; \
 } while (0)
 
-#define GET_SRC1 ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src1]))
-#define GET_SRC2 ((p_ins->mode & ADDR_MODE_IMM) ? (p_ins->imm) : (regs->registers[p_ins->src2]))
-#define READ_REG(reg) regs->registers[(reg)]
-#define WRITE_REG(reg, val) m_regs->registers[(reg)] = (val)
+#define GET_SRC1 (p_ins->imm)
+#define GET_SRC2 (p_ins->imm)
+#define READ_REG(reg) (regs[(reg)])
+#define WRITE_REG(reg, val) (regs[(reg)] = (val))
 
 #define BINARY_OP(op) do { \
-    WRITE_REG(p_ins->dst, READ_REG(p_ins->src1) op GET_SRC2); \
-    NEXT(); \
+    regs[p_ins->dst] = regs[p_ins->src1] op regs[p_ins->src2]; \
+    p_ins++; \
+    goto *p_ins->handler; \
 } while (0)
 
 #define CHECK_MEM(addr, len) do { \
@@ -108,130 +118,209 @@ int64_t run(CPU *cpu) {
     goto *p_ins->handler;
 
 OP_NOP: {
-        NEXT();
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_ADD: {
         BINARY_OP(+);
     }
 
+OP_ADD_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] + p_ins->imm;
+        NEXT();
+    }
+
 OP_SUB: {
         BINARY_OP(-);
+    }
+
+OP_SUB_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] - p_ins->imm;
+        NEXT();
     }
 
 OP_MUL: {
         BINARY_OP(*);
     }
 
+OP_MUL_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] * p_ins->imm;
+        NEXT();
+    }
+
 OP_DIV: {
-        const int64_t divisor = GET_SRC2;
+        const int64_t divisor = regs[p_ins->src2];
         if (divisor == 0) {
             cpu->running = false;
             cpu->returnValue = -1;
             goto FINAL;
         }
 
-        WRITE_REG(p_ins->dst, READ_REG(p_ins->src1) / divisor);
+        regs[p_ins->dst] = regs[p_ins->src1] / divisor;
+        NEXT();
+    }
+
+OP_DIV_IMM: {
+        const int64_t divisor = p_ins->imm;
+        if (divisor == 0) {
+            cpu->running = false;
+            cpu->returnValue = -1;
+            goto FINAL;
+        }
+
+        regs[p_ins->dst] = regs[p_ins->src1] / divisor;
         NEXT();
     }
 
 OP_INC: {
-        WRITE_REG(p_ins->dst, READ_REG(p_ins->dst) + 1);
-        NEXT();
+        regs[p_ins->dst]++;
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_DEC: {
-        WRITE_REG(p_ins->dst, READ_REG(p_ins->dst) - 1);
-        NEXT();
+        regs[p_ins->dst]--;
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_JMP: {
-        JUMP(GET_SRC1);
+        JUMP(0);
     }
 
 OP_CMP: {
-        const int64_t a = READ_REG(p_ins->src1);
-        const int64_t b = GET_SRC2;
+        const int64_t a = regs[p_ins->src1];
+        const int64_t b = regs[p_ins->src2];
         const int64_t r = a - b;
 
-        cpu->regs.zero_flag = (r == 0);
-        cpu->regs.sign_flag = (r < 0);
-        cpu->regs.carry_flag = ((uint64_t) a < (uint64_t) b);
+        m_regs->zero_flag = (r == 0);
+        m_regs->sign_flag = (r < 0);
+        m_regs->carry_flag = ((uint64_t) a < (uint64_t) b);
 
-        NEXT();
+        p_ins++;
+        goto *p_ins->handler;
+    }
+
+OP_CMP_IMM: {
+        const int64_t a = regs[p_ins->src1];
+        const int64_t b = p_ins->imm;
+        const int64_t r = a - b;
+
+        m_regs->zero_flag = (r == 0);
+        m_regs->sign_flag = (r < 0);
+        m_regs->carry_flag = ((uint64_t) a < (uint64_t) b);
+
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_JE: {
-        if (cpu->regs.zero_flag) {
-            JUMP(GET_SRC1);
+        if (m_regs->zero_flag) {
+            JUMP(0);
         }
-        NEXT();
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_JNE: {
-        if (!cpu->regs.zero_flag) {
-            JUMP(GET_SRC1);
+        if (!m_regs->zero_flag) {
+            JUMP(0);
         }
-        NEXT();
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_JL: {
-        if (cpu->regs.sign_flag) {
-            JUMP(GET_SRC1);
+        if (m_regs->sign_flag) {
+            JUMP(0);
         }
         NEXT();
     }
 
 OP_JG: {
-        if (!cpu->regs.sign_flag && !cpu->regs.zero_flag) {
-            JUMP(GET_SRC1);
+        if (!m_regs->sign_flag && !m_regs->zero_flag) {
+            JUMP(0);
         }
         NEXT();
     }
 
 OP_JLE: {
-        if (cpu->regs.sign_flag || cpu->regs.zero_flag) {
-            JUMP(GET_SRC1);
+        if (m_regs->sign_flag || m_regs->zero_flag) {
+            JUMP(0);
         }
         NEXT();
     }
 
 OP_JGE: {
-        if (!cpu->regs.sign_flag) {
-            JUMP(GET_SRC1);
+        if (!m_regs->sign_flag) {
+            JUMP(0);
         }
         NEXT();
     }
 
 OP_SETZ: {
-        WRITE_REG(p_ins->dst, (int64_t)cpu->regs.zero_flag);
+        WRITE_REG(p_ins->dst, (int64_t)m_regs->zero_flag);
         NEXT();
     }
 
 OP_MOV: {
-        WRITE_REG(p_ins->dst, GET_SRC1);
-        NEXT();
+        regs[p_ins->dst] = regs[p_ins->src1];
+        p_ins++;
+        goto *p_ins->handler;
+    }
+
+OP_MOV_IMM: {
+        regs[p_ins->dst] = p_ins->imm;
+        p_ins++;
+        goto *p_ins->handler;
     }
 
 OP_LSH: {
-        WRITE_REG(p_ins->dst, (int64_t)((uint64_t)READ_REG(p_ins->src1) << (GET_SRC2 & 63)));
+        regs[p_ins->dst] = (int64_t)((uint64_t)regs[p_ins->src1] << (regs[p_ins->src2] & 63));
+        NEXT();
+    }
+
+OP_LSH_IMM: {
+        regs[p_ins->dst] = (int64_t)((uint64_t)regs[p_ins->src1] << (p_ins->imm & 63));
         NEXT();
     }
 
 OP_RSH: {
-        WRITE_REG(p_ins->dst, (int64_t)((uint64_t)READ_REG(p_ins->src1) >> (GET_SRC2 & 63)));
+        regs[p_ins->dst] = (int64_t)((uint64_t)regs[p_ins->src1] >> (regs[p_ins->src2] & 63));
+        NEXT();
+    }
+
+OP_RSH_IMM: {
+        regs[p_ins->dst] = (int64_t)((uint64_t)regs[p_ins->src1] >> (p_ins->imm & 63));
         NEXT();
     }
 
 OP_LOAD: {
-        CHECK_MEM(GET_SRC1, 8);
-        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[GET_SRC1]);
+        uint64_t addr = (uint64_t)regs[p_ins->src1];
+        CHECK_MEM(addr, 8);
+        regs[p_ins->dst] = *(int64_t*)&ram_data[addr];
+        NEXT();
+    }
+
+OP_LOAD_IMM: {
+        uint64_t addr = (uint64_t)p_ins->imm;
+        CHECK_MEM(addr, 8);
+        regs[p_ins->dst] = *(int64_t*)&ram_data[addr];
         NEXT();
     }
 
 OP_STORE: {
-        CHECK_MEM(GET_SRC2, 8);
-        *(int64_t *) &m_ram_data[GET_SRC2] = READ_REG(p_ins->dst);
+        uint64_t addr = (uint64_t)regs[p_ins->src2];
+        CHECK_MEM(addr, 8);
+        *(int64_t *) &m_ram_data[addr] = regs[p_ins->dst];
+        NEXT();
+    }
+
+OP_STORE_IMM: {
+        uint64_t addr = (uint64_t)p_ins->imm;
+        CHECK_MEM(addr, 8);
+        *(int64_t *) &m_ram_data[addr] = regs[p_ins->dst];
         NEXT();
     }
 
@@ -239,12 +328,27 @@ OP_OR: {
         BINARY_OP(|);
     }
 
+OP_OR_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] | p_ins->imm;
+        NEXT();
+    }
+
 OP_AND: {
         BINARY_OP(&);
     }
 
+OP_AND_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] & p_ins->imm;
+        NEXT();
+    }
+
 OP_XOR: {
         BINARY_OP(^);
+    }
+
+OP_XOR_IMM: {
+        regs[p_ins->dst] = regs[p_ins->src1] ^ p_ins->imm;
+        NEXT();
     }
 
 OP_TIME: {
@@ -259,13 +363,24 @@ OP_PUSH: {
             goto FINAL;
         }
         m_regs->stack_pointer -= 8;
-        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = GET_SRC1;
+        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = regs[p_ins->src1];
+        NEXT();
+    }
+
+OP_PUSH_IMM: {
+        if (m_regs->stack_pointer < 8) {
+            cpu->running = false;
+            cpu->returnValue = -1;
+            goto FINAL;
+        }
+        m_regs->stack_pointer -= 8;
+        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = p_ins->imm;
         NEXT();
     }
 
 OP_POP: {
-        CHECK_MEM(regs->stack_pointer, 8);
-        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[regs->stack_pointer]);
+        CHECK_MEM(m_regs->stack_pointer, 8);
+        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[m_regs->stack_pointer]);
         m_regs->stack_pointer += 8;
         NEXT();
     }
@@ -282,13 +397,34 @@ OP_CALL: {
         m_regs->stack_pointer -= 8;
         *(uint64_t *)&m_ram_data[m_regs->stack_pointer] = ret_index;
 
-        JUMP(GET_SRC1);
+        uint64_t target = (uint64_t)regs[p_ins->src1];
+        ram_addr_t _pci = 0;
+        while (_pci < cpu->decodedSize && cpu->decodedProgram[_pci].addr < target) {
+            _pci++;
+        }
+        p_ins = &cpu->decodedProgram[_pci];
+        goto *p_ins->handler;
+    }
+
+OP_CALL_IMM: {
+        if (m_regs->stack_pointer < 8) {
+            cpu->running = false;
+            cpu->returnValue = -1;
+            goto FINAL;
+        }
+
+        uint64_t ret_index = (uint64_t)(p_ins - cpu->decodedProgram + 1);
+
+        m_regs->stack_pointer -= 8;
+        *(uint64_t *)&m_ram_data[m_regs->stack_pointer] = ret_index;
+
+        JUMP(0);
     }
 
 OP_RET: {
-        CHECK_MEM(regs->stack_pointer, 8);
+        CHECK_MEM(m_regs->stack_pointer, 8);
 
-        uint64_t ret = *(uint64_t *)&ram_data[regs->stack_pointer];
+        uint64_t ret = *(uint64_t *)&ram_data[m_regs->stack_pointer];
         m_regs->stack_pointer += 8;
 
         if (ret >= cpu->decodedSize) {
@@ -338,15 +474,15 @@ OP_SYSCALL: {
                      goto FINAL;
                  }
                  m_regs->stack_pointer -= 8;
-                 *(int64_t *) &m_ram_data[regs->stack_pointer] = READ_REG(0);
+                 *(int64_t *) &m_ram_data[m_regs->stack_pointer] = READ_REG(0);
                  break;
              case 1:
-                 if (regs->stack_pointer + 8 > cpu->ram.size) {
+                 if (m_regs->stack_pointer + 8 > cpu->ram.size) {
                      cpu->running = false;
                      cpu->returnValue = -1;
                      goto FINAL;
                  }
-                 WRITE_REG(0, *(int64_t*)&ram_data[regs->stack_pointer]);
+                 WRITE_REG(0, *(int64_t*)&ram_data[m_regs->stack_pointer]);
                  m_regs->stack_pointer += 8;
                  break;
              case 2:
@@ -447,7 +583,7 @@ OP_SYSCALL: {
              }
              case 14: {
                  printf("RAM Size: %lu bytes\n", cpu->ram.size);
-                 printf("Stack Pointer: %lu\n", regs->stack_pointer);
+                 printf("Stack Pointer: %lu\n", m_regs->stack_pointer);
 
                  break;
              }
@@ -535,7 +671,7 @@ bool instr_decode(const uint8_t *buffer, size_t limit, instr_t *instr) {
 
         if (imm_size == 4) {
             if (instr->imm & 0x80000000) {
-                instr->imm |= 0xFFFFFFFF00000000;
+                instr->imm |= (int64_t)0xFFFFFFFF00000000;
             }
         }
         instr->size += imm_size;

@@ -256,6 +256,12 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                 return 0;
             }
 
+            if (op == NOP) {
+                free(lineToTrim);
+                line = strtok_r(NULL, "\n", &savePtr);
+                continue;
+            }
+
             uint8_t mode = 0;
             char *ops[3] = {trim(op1), trim(op2), trim(op3)};
 
@@ -336,7 +342,7 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
         int count = sscanf(trimmed, "%31s %63[^,], %63[^,], %63s", instr, op1, op2, op3);
 
         int op = get_opcode(instr);
-        if (op != -1) {
+        if (op != -1 && op != NOP) {
             uint8_t mode = 0, dst = 0, src1 = 0, src2 = 0;
             int64_t imm = 0;
             bool isImm = false;
