@@ -11,7 +11,6 @@ static const OpMapping opTable[] = {
     {"add", ADD},
     {"and", AND},
     {"call", CALL},
-    {"cmp", CMP},
     {"debug", DEBUG},
     {"dec", DEC},
     {"div", DIV},
@@ -37,9 +36,9 @@ static const OpMapping opTable[] = {
     {"ret", RET},
     {"rsh", RSH},
     {"setz", SETZ},
-    {"store", STORE},
     {"sub", SUB},
     {"syscall", SYSCALL},
+    {"store", STORE},
     {"time", TIME},
     {"xor", XOR},
     {NULL, NOP}
@@ -414,11 +413,55 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                         dst = (uint8_t) reg3;
                     }
                     break;
+                case STORE:
+                    if (t_op1[0] == '$') {
+                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
+                        mode = ADDR_MODE_IMM;
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
+                        int reg = check_reg(instr, t_op2, lineToTrim, srcCopy);
+                        if (reg == -1) return 0;
+                        dst = (uint8_t) reg;
+                        src1 = dst;
+                    } else if (count == 3) {
+                        int reg1 = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                        int reg2 = check_reg(instr, t_op2, lineToTrim, srcCopy);
+                        if (reg1 == -1 || reg2 == -1) return 0;
+                        // For STORE %r1, %r2: R1 is address, R2 is value
+                        // In cpu.c: addr = READ_REG(dst), val = READ_REG(src1)
+                        dst = (uint8_t) reg1;
+                        src1 = (uint8_t) reg2;
+                    }
+                    break;
+                case LOAD:
+                    if (t_op1[0] == '$') {
+                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
+                        mode = ADDR_MODE_IMM;
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
+                        int reg = check_reg(instr, t_op2, lineToTrim, srcCopy);
+                        if (reg == -1) return 0;
+                        dst = (uint8_t) reg;
+                        src1 = dst;
+                    } else if (count == 3) {
+                        int reg1 = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                        int reg2 = check_reg(instr, t_op2, lineToTrim, srcCopy);
+                        if (reg1 == -1 || reg2 == -1) return 0;
+                        // For LOAD %r1, %r2: R1 is address, R2 is dest
+                        // In cpu.c: addr = READ_REG(src1), dest = dst
+                        src1 = (uint8_t) reg1;
+                        dst = (uint8_t) reg2;
+                    }
+                    break;
                 case INC:
-                case DEC: {
-                    int reg_inc = check_reg(instr, t_op1, lineToTrim, srcCopy);
-                    if (reg_inc == -1) return 0;
-                    dst = (uint8_t) reg_inc;
+                case DEC:
+                case PUSH:
+                case POP:
+                case TIME:
+                case DEBUG: {
+                    int reg_single = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                    if (reg_single == -1) return 0;
+                    dst = (uint8_t) reg_single;
                     break;
                 }
                 case JMP:
@@ -442,6 +485,9 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                         }
                         mode = ADDR_MODE_IMM;
                     }
+                    if (mode & ADDR_MODE_IMM) {
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
+                    }
                     break;
                 case JE:
                 case JNE:
@@ -449,19 +495,34 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                 case JG:
                 case JLE:
                 case JGE:
-                    if (t_op1[0] == '$') {
-                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
-                        if (!isImm) return 0;
-                        mode = ADDR_MODE_IMM;
-                    } else {
-                        imm = find_symbol(t_op1);
+                    if (count == 3) {
+                        int reg = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                        if (reg == -1) return 0;
+                        src1 = (uint8_t) reg;
+                        imm = find_symbol(t_op2);
                         if (imm == -1) {
-                            fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op1, instr);
+                            fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op2, instr);
                             free(lineToTrim);
                             free(srcCopy);
                             return 0;
                         }
                         mode = ADDR_MODE_IMM;
+                    } else if (count == 2) {
+                        imm = find_symbol(t_op1);
+                        if (imm == -1) {
+                             fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op1, instr);
+                             return 0;
+                        }
+                        src1 = 0; // Default to R0
+                        mode = ADDR_MODE_IMM;
+                    } else {
+                        fprintf(stderr, "Error: %s requires register and label operands\n", instr);
+                        free(lineToTrim);
+                        free(srcCopy);
+                        return 0;
+                    }
+                    if (mode & ADDR_MODE_IMM) {
+                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
                     }
                     break;
                 case LOOP:
@@ -484,82 +545,7 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                     dst = (uint8_t) regJump;
                     src1 = dst;
                     break;
-                case CMP:
-                    if (t_op1[0] == '$') {
-                        imm = check_imm("CMP", t_op1, &isImm, lineToTrim, srcCopy);
-                        if (!isImm) return 0;
-                        mode = ADDR_MODE_IMM;
-                        if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        int reg = check_reg("CMP", t_op2, lineToTrim, srcCopy);
-                        if (reg == -1) return 0;
-                        src1 = (uint8_t) reg;
-                    } else {
-                        int reg1 = check_reg("CMP", t_op1, lineToTrim, srcCopy);
-                        if (reg1 == -1) return 0;
-                        src1 = (uint8_t) reg1;
-                        if (t_op2[0] == '$') {
-                            imm = check_imm("CMP", t_op2, &isImm, lineToTrim, srcCopy);
-                            if (!isImm) return 0;
-                            mode = ADDR_MODE_IMM;
-                            if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
-                                mode |= ADDR_MODE_IMM8;
-                        } else {
-                            int reg2 = check_reg("CMP", t_op2, lineToTrim, srcCopy);
-                            if (reg2 == -1) return 0;
-                            src2 = (uint8_t) reg2;
-                        }
-                    }
-                    break;
-                case LOAD:
-                    if (t_op1[0] == '$') {
-                        imm = check_imm("LOAD", t_op1, &isImm, lineToTrim, srcCopy);
-                        if (!isImm) return 0;
-                        mode = ADDR_MODE_IMM;
-                    } else {
-                        int reg = check_reg("LOAD", t_op1, lineToTrim, srcCopy);
-                        if (reg == -1) return 0;
-                        src1 = (uint8_t) reg;
-                    }
-                    int regLoadDst = check_reg("LOAD", t_op2, lineToTrim, srcCopy);
-                    if (regLoadDst == -1) return 0;
-                    dst = (uint8_t) regLoadDst;
-                    break;
-                case STORE: {
-                    int regStoreSrc = check_reg("STORE", t_op1, lineToTrim, srcCopy);
-                    if (regStoreSrc == -1) return 0;
-                    src1 = (uint8_t) regStoreSrc;
-                    if (t_op2[0] == '$') {
-                        imm = check_imm("STORE", t_op2, &isImm, lineToTrim, srcCopy);
-                        if (!isImm) return 0;
-                        mode = ADDR_MODE_IMM;
-                    } else {
-                        int reg2 = check_reg("STORE", t_op2, lineToTrim, srcCopy);
-                        if (reg2 == -1) return 0;
-                        src2 = (uint8_t) reg2;
-                    }
-                    dst = src1;
-                    break;
-                }
-                case PUSH:
-                    if (t_op1[0] == '$') {
-                        imm = check_imm("PUSH", t_op1, &isImm, lineToTrim, srcCopy);
-                        if (!isImm) return 0;
-                        mode = ADDR_MODE_IMM;
-                    } else {
-                        int reg_push = check_reg("PUSH", t_op1, lineToTrim, srcCopy);
-                        if (reg_push == -1) return 0;
-                        src1 = (uint8_t) reg_push;
-                    }
-                    break;
-                case POP: {
-                    int regPopDst = check_reg("POP", t_op1, lineToTrim, srcCopy);
-                    if (regPopDst == -1) return 0;
-                    dst = (uint8_t) regPopDst;
-                    break;
-                }
-                case SETZ:
-                case TIME:
-                case DEBUG: {
+                case SETZ: {
                     int regSetDst = check_reg(instr, t_op1, lineToTrim, srcCopy);
                     if (regSetDst == -1) return 0;
                     dst = (uint8_t) regSetDst;

@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 project(wvm C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -flto")
-set(CMAKE_C_FLAGS_DEBUG "-O3 -march=native")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -flto -fomit-frame-pointer -funroll-loops -fstrict-aliasing -ffast-math -g -fprofile-use")
+set(CMAKE_C_FLAGS_DEBUG "-O3 -march=native -flto -fomit-frame-pointer -funroll-loops -fstrict-aliasing -ffast-math -g -fprofile-use")
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 

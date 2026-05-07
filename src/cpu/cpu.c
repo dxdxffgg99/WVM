@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "../bytecode/opcode.h"
 
 _Pragma("GCC diagnostic push")
@@ -18,7 +20,6 @@ int64_t run(CPU *cpu) {
         [INC] = &&OP_INC,
         [DEC] = &&OP_DEC,
         [JMP] = &&OP_JMP,
-        [CMP] = &&OP_CMP,
         [JE] = &&OP_JE,
         [JNE] = &&OP_JNE,
         [JL] = &&OP_JL,
@@ -29,46 +30,49 @@ int64_t run(CPU *cpu) {
         [MOV] = &&OP_MOV,
         [LSH] = &&OP_LSH,
         [RSH] = &&OP_RSH,
-        [LOAD] = &&OP_LOAD,
-        [STORE] = &&OP_STORE,
         [OR] = &&OP_OR,
         [AND] = &&OP_AND,
         [XOR] = &&OP_XOR,
-        [TIME] = &&OP_TIME,
-        [PUSH] = &&OP_PUSH,
-        [POP] = &&OP_POP,
         [CALL] = &&OP_CALL,
         [RET] = &&OP_RET,
         [EOP] = &&OP_EOP,
         [EOPV] = &&OP_EOPV,
-        [DEBUG] = &&OP_DEBUG,
         [LOOP] = &&OP_LOOP,
-        [SYSCALL] = &&OP_SYSCALL
+        [SYSCALL] = &&OP_SYSCALL,
+        [PUSH] = &&OP_PUSH,
+        [POP] = &&OP_POP,
+        [LOAD] = &&OP_LOAD,
+        [STORE] = &&OP_STORE,
+        [TIME] = &&OP_TIME,
+        [DEBUG] = &&OP_DEBUG
     };
 
     if (!cpu->isThreaded) {
-        static void *dispatch_imm[] = {
+        static void *dispatchImm[64] = {
             [ADD] = &&OP_ADD_IMM,
             [SUB] = &&OP_SUB_IMM,
             [MUL] = &&OP_MUL_IMM,
             [DIV] = &&OP_DIV_IMM,
-            [CMP] = &&OP_CMP_IMM,
             [MOV] = &&OP_MOV_IMM,
             [LSH] = &&OP_LSH_IMM,
             [RSH] = &&OP_RSH_IMM,
             [OR] = &&OP_OR_IMM,
             [AND] = &&OP_AND_IMM,
             [XOR] = &&OP_XOR_IMM,
-            [PUSH] = &&OP_PUSH_IMM,
-            [LOAD] = &&OP_LOAD_IMM,
-            [STORE] = &&OP_STORE_IMM,
-            [CALL] = &&OP_CALL_IMM
+            [CALL] = &&OP_CALL_IMM,
+            [JMP] = &&OP_JMP,
+            [JE] = &&OP_JE,
+            [JNE] = &&OP_JNE,
+            [JL] = &&OP_JL,
+            [JG] = &&OP_JG,
+            [JLE] = &&OP_JLE,
+            [JGE] = &&OP_JGE
         };
 
         for (ram_addr_t i = 0; i < cpu->decodedSize; i++) {
             instr_t *ins = &cpu->decodedProgram[i];
-            if ((ins->mode & ADDR_MODE_IMM) && dispatch_imm[ins->opcode]) {
-                ins->handler = dispatch_imm[ins->opcode];
+            if ((ins->mode & ADDR_MODE_IMM) && dispatchImm[ins->opcode]) {
+                ins->handler = dispatchImm[ins->opcode];
             } else {
                 ins->handler = dispatch[ins->opcode];
             }
@@ -189,34 +193,8 @@ OP_JMP: {
         JUMP(0);
     }
 
-OP_CMP: {
-        const int64_t a = regs[p_ins->src1];
-        const int64_t b = regs[p_ins->src2];
-        const int64_t r = a - b;
-
-        m_regs->zero_flag = (r == 0);
-        m_regs->sign_flag = (r < 0);
-        m_regs->carry_flag = ((uint64_t) a < (uint64_t) b);
-
-        p_ins++;
-        goto *p_ins->handler;
-    }
-
-OP_CMP_IMM: {
-        const int64_t a = regs[p_ins->src1];
-        const int64_t b = p_ins->imm;
-        const int64_t r = a - b;
-
-        m_regs->zero_flag = (r == 0);
-        m_regs->sign_flag = (r < 0);
-        m_regs->carry_flag = ((uint64_t) a < (uint64_t) b);
-
-        p_ins++;
-        goto *p_ins->handler;
-    }
-
 OP_JE: {
-        if (m_regs->zero_flag) {
+        if (regs[p_ins->src1] == 0) {
             JUMP(0);
         }
         p_ins++;
@@ -224,7 +202,7 @@ OP_JE: {
     }
 
 OP_JNE: {
-        if (!m_regs->zero_flag) {
+        if (regs[p_ins->src1] != 0) {
             JUMP(0);
         }
         p_ins++;
@@ -232,28 +210,29 @@ OP_JNE: {
     }
 
 OP_JL: {
-        if (m_regs->sign_flag) {
+        if (regs[p_ins->src1] < 0) {
             JUMP(0);
         }
         NEXT();
     }
 
 OP_JG: {
-        if (!m_regs->sign_flag && !m_regs->zero_flag) {
+        const int64_t val = READ_REG(p_ins->src1);
+        if (val > 0) {
             JUMP(0);
         }
         NEXT();
     }
 
 OP_JLE: {
-        if (m_regs->sign_flag || m_regs->zero_flag) {
+        if (regs[p_ins->src1] <= 0) {
             JUMP(0);
         }
         NEXT();
     }
 
 OP_JGE: {
-        if (!m_regs->sign_flag) {
+        if (regs[p_ins->src1] >= 0) {
             JUMP(0);
         }
         NEXT();
@@ -296,34 +275,6 @@ OP_RSH_IMM: {
         NEXT();
     }
 
-OP_LOAD: {
-        uint64_t addr = (uint64_t)regs[p_ins->src1];
-        CHECK_MEM(addr, 8);
-        regs[p_ins->dst] = *(int64_t*)&ram_data[addr];
-        NEXT();
-    }
-
-OP_LOAD_IMM: {
-        uint64_t addr = (uint64_t)p_ins->imm;
-        CHECK_MEM(addr, 8);
-        regs[p_ins->dst] = *(int64_t*)&ram_data[addr];
-        NEXT();
-    }
-
-OP_STORE: {
-        uint64_t addr = (uint64_t)regs[p_ins->src2];
-        CHECK_MEM(addr, 8);
-        *(int64_t *) &m_ram_data[addr] = regs[p_ins->dst];
-        NEXT();
-    }
-
-OP_STORE_IMM: {
-        uint64_t addr = (uint64_t)p_ins->imm;
-        CHECK_MEM(addr, 8);
-        *(int64_t *) &m_ram_data[addr] = regs[p_ins->dst];
-        NEXT();
-    }
-
 OP_OR: {
         BINARY_OP(|);
     }
@@ -348,40 +299,6 @@ OP_XOR: {
 
 OP_XOR_IMM: {
         regs[p_ins->dst] = regs[p_ins->src1] ^ p_ins->imm;
-        NEXT();
-    }
-
-OP_TIME: {
-        WRITE_REG(p_ins->dst, (int64_t)time(NULL));
-        NEXT();
-    }
-
-OP_PUSH: {
-        if (m_regs->stack_pointer < 8) {
-            cpu->running = false;
-            cpu->returnValue = -1;
-            goto FINAL;
-        }
-        m_regs->stack_pointer -= 8;
-        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = regs[p_ins->src1];
-        NEXT();
-    }
-
-OP_PUSH_IMM: {
-        if (m_regs->stack_pointer < 8) {
-            cpu->running = false;
-            cpu->returnValue = -1;
-            goto FINAL;
-        }
-        m_regs->stack_pointer -= 8;
-        *(int64_t *)&m_ram_data[m_regs->stack_pointer] = p_ins->imm;
-        NEXT();
-    }
-
-OP_POP: {
-        CHECK_MEM(m_regs->stack_pointer, 8);
-        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[m_regs->stack_pointer]);
-        m_regs->stack_pointer += 8;
         NEXT();
     }
 
@@ -449,11 +366,6 @@ OP_EOPV: {
         goto FINAL;
     }
 
-OP_DEBUG: {
-        cpu_dump_registers(cpu);
-        NEXT();
-    }
-
 OP_LOOP: {
         const int64_t val = READ_REG(p_ins->dst) - 1;
         WRITE_REG(p_ins->dst, val);
@@ -467,172 +379,164 @@ OP_SYSCALL: {
          const int64_t syscall_num = GET_SRC1;
 
          switch (syscall_num) {
-             case 0:
-                 if (m_regs->stack_pointer < 8) {
-                     cpu->running = false;
-                     cpu->returnValue = -1;
-                     goto FINAL;
-                 }
-                 m_regs->stack_pointer -= 8;
-                 *(int64_t *) &m_ram_data[m_regs->stack_pointer] = READ_REG(0);
-                 break;
-             case 1:
-                 if (m_regs->stack_pointer + 8 > cpu->ram.size) {
-                     cpu->running = false;
-                     cpu->returnValue = -1;
-                     goto FINAL;
-                 }
-                 WRITE_REG(0, *(int64_t*)&ram_data[m_regs->stack_pointer]);
-                 m_regs->stack_pointer += 8;
-                 break;
-             case 2:
+             case 2: // PRINT LONG R0
                  printf("%ld", READ_REG(0));
                  break;
-             case 3: {
+             case 3: { // PRINT CHAR R0 (UTF-8)
                  int64_t ch = READ_REG(0);
                  if (ch >= 0 && ch <= 127) {
                      printf("%c", (char)ch);
                  } else if (ch >= 128 && ch <= 0x7FF) {
                      char utf8[3];
-
                      utf8[0] = (char)(0xC0 | (ch >> 6));
                      utf8[1] = (char)(0x80 | (ch & 0x3F));
                      utf8[2] = '\0';
-
                      printf("%s", utf8);
                  } else if (ch >= 0x800 && ch <= 0xFFFF) {
                      char utf8[4];
-
                      utf8[0] = (char)(0xE0 | (ch >> 12));
                      utf8[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
                      utf8[2] = (char)(0x80 | (ch & 0x3F));
                      utf8[3] = '\0';
-
                      printf("%s", utf8);
                  } else if (ch >= 0x10000 && ch <= 0x10FFFF) {
                      char utf8[5];
-
                      utf8[0] = (char)(0xF0 | (ch >> 18));
                      utf8[1] = (char)(0x80 | ((ch >> 12) & 0x3F));
                      utf8[2] = (char)(0x80 | ((ch >> 6) & 0x3F));
                      utf8[3] = (char)(0x80 | (ch & 0x3F));
                      utf8[4] = '\0';
-
                      printf("%s", utf8);
                  }
                  break;
              }
-             case 4: {
-                 uint64_t addr = READ_REG(1);
-
-                 CHECK_MEM(addr, 8);
-
-                 int64_t tmp;
-                 memcpy(&tmp, &cpu->ram.data[addr], 8);
-
-                 WRITE_REG(0, tmp);
-                 break;
-             }
-             case 5: {
-                 uint64_t addr = READ_REG(1);
-                 int64_t val = READ_REG(2);
-
-                 CHECK_MEM(addr, 8);
-
-                 *(int64_t *)&m_ram_data[addr] = val;
-
-                 break;
-             }
-             case 6: {
+             case 6: // GETCHAR -> R0
                  WRITE_REG(0, (int64_t)getchar());
-
                  break;
-             }
-             case 9: {
+             case 8: // EXIT R0
+                 cpu->running = false;
+                 cpu->returnValue = READ_REG(0);
+                 goto FINAL;
+             case 9: // PRINT NEWLINE
                  printf("\n");
-
                  break;
-             }
-             case 10: {
+             case 10: // PRINT HASH R0
                  printf("Hash: %lx\n", READ_REG(0));
                  break;
-             }
-             case 11: {
-                 int64_t val = READ_REG(0);
-
-                 printf("%ld (0x%lx)\n", val, val);
-
+             case 11: // PRINT DEC (HEX) R0
+                 printf("%ld (0x%lx)\n", READ_REG(0), READ_REG(0));
                  break;
-             }
-
-             case 12: {
+             case 12: // PRINT HEX R0
                  printf("%lx\n", READ_REG(0));
-
                  break;
-             }
-             case 13: {
-                 int64_t val = READ_REG(0);
-
-                 for (int i = 63; i >= 0; i--) {
-                     printf("%d", (int)((val >> i) & 1));
+             case 13: // PRINT BINARY R0
+                 {
+                     int64_t val = READ_REG(0);
+                     for (int i = 63; i >= 0; i--) {
+                         printf("%d", (int)((val >> i) & 1));
+                     }
+                     printf("\n");
                  }
-
-                 printf("\n");
-
                  break;
-             }
-             case 14: {
-                 printf("RAM Size: %lu bytes\n", cpu->ram.size);
-                 printf("Stack Pointer: %lu\n", m_regs->stack_pointer);
-
-                 break;
-             }
-             case 15: {
+             case 15: { // MEMCPY(dest=R1, src=R2, len=R3)
                  uint64_t dest = READ_REG(1);
                  uint64_t src = READ_REG(2);
                  int64_t len = READ_REG(3);
-
-                 if (len < 0) {
-                     cpu->running = false;
-                     cpu->returnValue = -1;
-                     goto FINAL;
-                 }
-
+                 if (len < 0) { cpu->running = false; cpu->returnValue = -1; goto FINAL; }
                  CHECK_MEM(dest, (size_t)len);
                  CHECK_MEM(src, (size_t)len);
                  memcpy(&m_ram_data[dest], &ram_data[src], (size_t)len);
-
                  break;
              }
-             case 16: {
+             case 16: { // MEMSET(addr=R1, val=R2, len=R3)
                  uint64_t addr = READ_REG(1);
                  int64_t len = READ_REG(3);
-
-                 if (len < 0) {
-                     cpu->running = false;
-                     cpu->returnValue = -1;
-                     goto FINAL;
-                 }
-
+                 if (len < 0) { cpu->running = false; cpu->returnValue = -1; goto FINAL; }
                  CHECK_MEM(addr, (size_t)len);
                  memset(&m_ram_data[addr], (int)READ_REG(2), (size_t)len);
-
                  break;
              }
-             case 17: {
+             case 17: { // NANOSLEEP(us=R0)
                  int64_t us = READ_REG(0);
-
-                 if (us < 0) {
-                     cpu->running = false;
-                     cpu->returnValue = -1;
-                     goto FINAL;
-                 }
-
+                 if (us < 0) { cpu->running = false; cpu->returnValue = -1; goto FINAL; }
                  struct timespec req;
                  req.tv_sec = us / 1000000;
                  req.tv_nsec = (us % 1000000) * 1000;
-
                  nanosleep(&req, NULL);
+                 break;
+             }
+             case 20: { // OPEN(path_addr=R1, flags=R2) -> R0 (fd)
+                 uint64_t path_addr = READ_REG(1);
+                 // Simple check for path length or valid RAM
+                 CHECK_MEM(path_addr, 1);
+                 const char *path = (const char *)&ram_data[path_addr];
+                 // Note: path must be null-terminated in RAM
+                 int fd = open(path, (int)READ_REG(2), 0644);
+                 WRITE_REG(0, (int64_t)fd);
+                 break;
+             }
+             case 21: { // READ(fd=R1, buf_addr=R2, len=R3) -> R0 (bytes)
+                 int fd = (int)READ_REG(1);
+                 uint64_t buf_addr = READ_REG(2);
+                 int64_t len = READ_REG(3);
+                 if (len < 0) { cpu->running = false; cpu->returnValue = -1; goto FINAL; }
+                 CHECK_MEM(buf_addr, (size_t)len);
+                 ssize_t bytes = read(fd, &m_ram_data[buf_addr], (size_t)len);
+                 WRITE_REG(0, (int64_t)bytes);
+                 break;
+             }
+             case 22: { // WRITE(fd=R1, buf_addr=R2, len=R3) -> R0 (bytes)
+                 int fd = (int)READ_REG(1);
+                 uint64_t buf_addr = READ_REG(2);
+                 int64_t len = READ_REG(3);
+                 if (len < 0) { cpu->running = false; cpu->returnValue = -1; goto FINAL; }
+                 CHECK_MEM(buf_addr, (size_t)len);
+                 ssize_t bytes = write(fd, &ram_data[buf_addr], (size_t)len);
+                 WRITE_REG(0, (int64_t)bytes);
+                 break;
+             }
+             case 23: { // CLOSE(fd=R1) -> R0
+                 int fd = (int)READ_REG(1);
+                 WRITE_REG(0, (int64_t)close(fd));
+                 break;
+             }
+             case 24: { // LSEEK(fd=R1, offset=R2, whence=R3) -> R0
+                 int fd = (int)READ_REG(1);
+                 off_t offset = (off_t)READ_REG(2);
+                 int whence = (int)READ_REG(3);
+                 WRITE_REG(0, (int64_t)lseek(fd, offset, whence));
+                 break;
+             }
+             case 30: { // BRK(new_brk=R1) -> R0 (current brk)
+                 // This is a simplified memory expansion
+                 uint64_t new_size = READ_REG(1);
+                 if (new_size > cpu->ram.size) {
+                     uint8_t *new_data = realloc(cpu->ram.data, new_size);
+                     if (new_data) {
+                         memset(new_data + cpu->ram.size, 0, new_size - cpu->ram.size);
+                         cpu->ram.data = new_data;
+                         cpu->ram.size = new_size;
+                         // Update pointers that might have changed
+                         ram_data = cpu->ram.data;
+                         m_ram_data = cpu->ram.data;
+                     }
+                 }
+                 WRITE_REG(0, (int64_t)cpu->ram.size);
+                 break;
+             }
+             case 40: { // GETENV(name_addr=R1) -> R0 (val_addr in RAM or 0)
+                 uint64_t name_addr = READ_REG(1);
+                 uint64_t buf_addr = READ_REG(2);
+                 int64_t buf_len = READ_REG(3);
+                 CHECK_MEM(name_addr, 1);
+                 CHECK_MEM(buf_addr, (size_t)buf_len);
+                 char *val = getenv((const char *)&ram_data[name_addr]);
+                 if (val) {
+                     strncpy((char *)&m_ram_data[buf_addr], val, (size_t)buf_len);
+                     WRITE_REG(0, 1);
+                 } else {
+                     WRITE_REG(0, 0);
+                 }
                  break;
              }
              default:
@@ -642,6 +546,57 @@ OP_SYSCALL: {
          }
          NEXT();
      }
+
+OP_PUSH: {
+        if (m_regs->stack_pointer < 8) {
+            cpu->running = false;
+            cpu->returnValue = -1;
+            goto FINAL;
+        }
+        m_regs->stack_pointer -= 8;
+        *(int64_t *) &m_ram_data[m_regs->stack_pointer] = READ_REG(p_ins->dst);
+        NEXT();
+    }
+
+OP_POP: {
+        if (m_regs->stack_pointer + 8 > cpu->ram.size) {
+            cpu->running = false;
+            cpu->returnValue = -1;
+            goto FINAL;
+        }
+        WRITE_REG(p_ins->dst, *(int64_t*)&ram_data[m_regs->stack_pointer]);
+        m_regs->stack_pointer += 8;
+        NEXT();
+    }
+
+OP_LOAD: {
+        uint64_t addr = (uint64_t)READ_REG(p_ins->src1);
+        CHECK_MEM(addr, 8);
+        int64_t tmp;
+        memcpy(&tmp, &cpu->ram.data[addr], 8);
+        WRITE_REG(p_ins->dst, tmp);
+        NEXT();
+    }
+
+OP_STORE: {
+        uint64_t addr = (uint64_t)READ_REG(p_ins->dst);
+        int64_t val = READ_REG(p_ins->src1);
+        CHECK_MEM(addr, 8);
+        *(int64_t *)&m_ram_data[addr] = val;
+        NEXT();
+    }
+
+OP_TIME: {
+        WRITE_REG(p_ins->dst, (int64_t)time(NULL));
+        NEXT();
+    }
+
+OP_DEBUG: {
+        cpu_dump_registers(cpu);
+        printf("RAM Size: %lu bytes\n", cpu->ram.size);
+        printf("Stack Pointer: %lu\n", m_regs->stack_pointer);
+        NEXT();
+    }
 
 FINAL:
 #undef NEXT
@@ -717,11 +672,6 @@ void cpu_free(CPU *cpu) {
             free(cpu->ram.data);
             cpu->ram.data = NULL;
             cpu->ram.size = 0;
-        }
-        if (cpu->decodedProgram) {
-            free(cpu->decodedProgram);
-            cpu->decodedProgram = NULL;
-            cpu->decodedSize = 0;
         }
     }
 }

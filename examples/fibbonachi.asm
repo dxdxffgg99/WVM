@@ -8,8 +8,7 @@ loop:
     add %r0, %r1
     mov %r3, %r0
     sub $1, %r2
-    cmp $0, %r2
-    jg loop
+    jg %r2, loop
 
 syscall $2
 syscall $9

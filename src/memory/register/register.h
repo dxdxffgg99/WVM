@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define REG_COUNT 64
+#define REG_COUNT 32
 
 #define r(v) (v)
 #define rZ (64)
