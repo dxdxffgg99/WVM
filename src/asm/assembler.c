@@ -50,10 +50,13 @@ typedef struct {
 } Symbol;
 
 #define MAX_SYMBOLS 1024
+
 static Symbol symbolTable[MAX_SYMBOLS];
 static int symbolCount = 0;
 
-static char *trim(char *str) {
+static char
+*trim(char *str)
+{
     while (isspace((unsigned char)*str)) str++;
 
     if (*str == 0) return str;
@@ -65,7 +68,10 @@ static char *trim(char *str) {
     return str;
 }
 
-static void add_symbol(const char *name, uint64_t addr) {
+static void
+add_symbol(const char *name,
+    uint64_t addr)
+{
     if (symbolCount < MAX_SYMBOLS) {
         strncpy(symbolTable[symbolCount].name, name, 63);
         symbolTable[symbolCount].name[63] = '\0';
@@ -74,7 +80,9 @@ static void add_symbol(const char *name, uint64_t addr) {
     }
 }
 
-static int64_t find_symbol(const char *name) {
+static int64_t
+find_symbol(const char *name)
+{
     for (int i = 0; i < symbolCount; i++) {
         if (strcmp(symbolTable[i].name, name) == 0) {
             return (int64_t) symbolTable[i].addr;
@@ -83,7 +91,9 @@ static int64_t find_symbol(const char *name) {
     return -1;
 }
 
-static int get_opcode(const char *name) {
+static int
+get_opcode(const char *name)
+{
     for (int i = 0; opTable[i].name != NULL; i++) {
         if (strcmp(name, opTable[i].name) == 0) return opTable[i].op;
     }
@@ -91,7 +101,9 @@ static int get_opcode(const char *name) {
     return -1;
 }
 
-static int parse_register(const char *str) {
+static int
+parse_register(const char *str)
+{
     if (str[0] != '%' ||
         str[1] != 'r' ||
         !isdigit((unsigned char)str[2]))
@@ -111,7 +123,10 @@ static int parse_register(const char *str) {
     return (int)reg;
 }
 
-static int64_t parse_immediate(const char *str, bool *isImm) {
+static int64_t
+parse_immediate(const char *str,
+                bool *isImm)
+{
     *isImm = false;
 
     if (str[0] != '$') return 0;
@@ -126,7 +141,10 @@ static int64_t parse_immediate(const char *str, bool *isImm) {
     return imm;
 }
 
-static char *preprocess_line(char *line, char **lineToFree) {
+static char
+*preprocess_line(char *line,
+                 char **lineToFree)
+{
     *lineToFree = strdup(line);
     if (!*lineToFree) return NULL;
     char *comment_start = strchr(*lineToFree, '#');
@@ -134,7 +152,11 @@ static char *preprocess_line(char *line, char **lineToFree) {
     return trim(*lineToFree);
 }
 
-static int check_reg(const char *name, const char *regStr, char *lineToFree, char *srcCopy) {
+static int
+check_reg(const char *name,
+          const char *regStr,
+          char *lineToFree, char *srcCopy)
+{
     int reg = parse_register(regStr);
 
     if (reg == -1) {
@@ -146,7 +168,13 @@ static int check_reg(const char *name, const char *regStr, char *lineToFree, cha
     return reg;
 }
 
-static int64_t check_imm(const char *name, const char *immStr, bool *isImm, char *lineToFree, char *srcCopy) {
+static int64_t
+check_imm(const char *name,
+        const char *immStr,
+        bool *isImm,
+        char *lineToFree,
+        char *srcCopy)
+{
     int64_t imm = parse_immediate(immStr, isImm);
     if (!*isImm) {
         fprintf(stderr, "Error: Invalid immediate value '%s' in %s\n", immStr, name);
@@ -189,7 +217,11 @@ encode_instruction(uint8_t opcode,
     }
 }
 
-size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
+size_t
+assemble(const char *source,
+         uint8_t *output,
+         size_t maxSize)
+{
     symbolCount = 0;
     char *srcCopy = strdup(source);
 
@@ -447,8 +479,6 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                         int reg1 = check_reg(instr, t_op1, lineToTrim, srcCopy);
                         int reg2 = check_reg(instr, t_op2, lineToTrim, srcCopy);
                         if (reg1 == -1 || reg2 == -1) return 0;
-                        // For LOAD %r1, %r2: R1 is address, R2 is dest
-                        // In cpu.c: addr = READ_REG(src1), dest = dst
                         src1 = (uint8_t) reg1;
                         dst = (uint8_t) reg2;
                     }
@@ -513,7 +543,7 @@ size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
                              fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op1, instr);
                              return 0;
                         }
-                        src1 = 0; // Default to R0
+                        src1 = 0;
                         mode = ADDR_MODE_IMM;
                     } else {
                         fprintf(stderr, "Error: %s requires register and label operands\n", instr);

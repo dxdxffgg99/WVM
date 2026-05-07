@@ -109,23 +109,23 @@ main(int argc, char *argv[])
 {
     const char *filePath = NULL;
 
-    int arg_index = 1;
-    while (arg_index < argc) {
-        if (strcmp(argv[arg_index], "--help") == 0 || strcmp(argv[arg_index], "-h") == 0) {
+    int argIndex = 1;
+    while (argIndex < argc) {
+        if (strcmp(argv[argIndex], "--help") == 0 || strcmp(argv[argIndex], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
-        } else if (strcmp(argv[arg_index], "--no-ansi") == 0) {
+        } else if (strcmp(argv[argIndex], "--no-ansi") == 0) {
             noAnsi = true;
-            arg_index++;
-        } else if (strcmp(argv[arg_index], "--minimal") == 0) {
+            argIndex++;
+        } else if (strcmp(argv[argIndex], "--minimal") == 0) {
             minimal = true;
             noAnsi = true;
-            arg_index++;
-        } else if (argv[arg_index][0] != '-') {
-            filePath = argv[arg_index];
+            argIndex++;
+        } else if (argv[argIndex][0] != '-') {
+            filePath = argv[argIndex];
             break;
         } else {
-            arg_index++;
+            argIndex++;
         }
     }
 
@@ -170,7 +170,7 @@ main(int argc, char *argv[])
         if (minimal) {
             fprintf(stderr, "Assemble failed\n");
         } else {
-            fprintf(stderr, "%s└─═══[Assemble fail]═══─┘%s\n", ANSI_RED(), ANSI_RESET());
+            fprintf(stderr, "%s└─═══[Assemble fail  ]═══─┘%s\n", ANSI_RED(), ANSI_RESET());
         }
         cpu_free(&cpu);
         free(assembly);
