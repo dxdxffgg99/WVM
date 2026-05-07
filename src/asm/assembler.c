@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-static const OpMapping op_table[] = {
+static const OpMapping opTable[] = {
     {"add", ADD},
     {"and", AND},
     {"call", CALL},
@@ -51,8 +51,8 @@ typedef struct {
 } Symbol;
 
 #define MAX_SYMBOLS 1024
-static Symbol symbol_table[MAX_SYMBOLS];
-static int symbol_count = 0;
+static Symbol symbolTable[MAX_SYMBOLS];
+static int symbolCount = 0;
 
 static char *trim(char *str) {
     while (isspace((unsigned char)*str)) str++;
@@ -67,41 +67,53 @@ static char *trim(char *str) {
 }
 
 static void add_symbol(const char *name, uint64_t addr) {
-    if (symbol_count < MAX_SYMBOLS) {
-        strncpy(symbol_table[symbol_count].name, name, 63);
-        symbol_table[symbol_count].name[63] = '\0';
-        symbol_table[symbol_count].addr = addr;
-        symbol_count++;
+    if (symbolCount < MAX_SYMBOLS) {
+        strncpy(symbolTable[symbolCount].name, name, 63);
+        symbolTable[symbolCount].name[63] = '\0';
+        symbolTable[symbolCount].addr = addr;
+        symbolCount++;
     }
 }
 
 static int64_t find_symbol(const char *name) {
-    for (int i = 0; i < symbol_count; i++) {
-        if (strcmp(symbol_table[i].name, name) == 0) {
-            return (int64_t) symbol_table[i].addr;
+    for (int i = 0; i < symbolCount; i++) {
+        if (strcmp(symbolTable[i].name, name) == 0) {
+            return (int64_t) symbolTable[i].addr;
         }
     }
     return -1;
 }
 
 static int get_opcode(const char *name) {
-    for (int i = 0; op_table[i].name != NULL; i++) {
-        if (strcmp(name, op_table[i].name) == 0) return op_table[i].op;
+    for (int i = 0; opTable[i].name != NULL; i++) {
+        if (strcmp(name, opTable[i].name) == 0) return opTable[i].op;
     }
 
     return -1;
 }
 
 static int parse_register(const char *str) {
-    if (str[0] != '%' || str[1] != 'r' || !isdigit((unsigned char)str[2])) return -1;
+    if (str[0] != '%' ||
+        str[1] != 'r' ||
+        !isdigit((unsigned char)str[2]))
+    {
+        return -1;
+    }
+
     char *endptr;
     long reg = strtol(&str[2], &endptr, 10);
-    if (*endptr != '\0' || reg < 0 || reg > 255) return -1;
-    return (int) reg;
+    if (*endptr != '\0' ||
+        reg < 0 ||
+        reg > REG_COUNT)
+    {
+        return -1;
+    }
+
+    return (int)reg;
 }
 
-static int64_t parse_immediate(const char *str, bool *is_imm) {
-    *is_imm = false;
+static int64_t parse_immediate(const char *str, bool *isImm) {
+    *isImm = false;
 
     if (str[0] != '$') return 0;
 
@@ -111,42 +123,50 @@ static int64_t parse_immediate(const char *str, bool *is_imm) {
 
     if (errno != 0 || *endptr != '\0') return 0;
 
-    *is_imm = true;
+    *isImm = true;
     return imm;
 }
 
-static char *preprocess_line(char *line, char **line_to_free) {
-    *line_to_free = strdup(line);
-    if (!*line_to_free) return NULL;
-    char *comment_start = strchr(*line_to_free, '#');
+static char *preprocess_line(char *line, char **lineToFree) {
+    *lineToFree = strdup(line);
+    if (!*lineToFree) return NULL;
+    char *comment_start = strchr(*lineToFree, '#');
     if (comment_start) *comment_start = '\0';
-    return trim(*line_to_free);
+    return trim(*lineToFree);
 }
 
-static int check_reg(const char *name, const char *reg_str, char *line_to_free, char *src_copy) {
-    int reg = parse_register(reg_str);
+static int check_reg(const char *name, const char *regStr, char *lineToFree, char *srcCopy) {
+    int reg = parse_register(regStr);
 
     if (reg == -1) {
-        fprintf(stderr, "Error: Invalid register '%s' in %s\n", reg_str, name);
-        free(line_to_free);
-        free(src_copy);
+        fprintf(stderr, "Error: Invalid register '%s' in %s\n", regStr, name);
+        free(lineToFree);
+        free(srcCopy);
     }
 
     return reg;
 }
 
-static int64_t check_imm(const char *name, const char *imm_str, bool *is_imm, char *line_to_free, char *src_copy) {
-    int64_t imm = parse_immediate(imm_str, is_imm);
-    if (!*is_imm) {
-        fprintf(stderr, "Error: Invalid immediate value '%s' in %s\n", imm_str, name);
-        free(line_to_free);
-        free(src_copy);
+static int64_t check_imm(const char *name, const char *immStr, bool *isImm, char *lineToFree, char *srcCopy) {
+    int64_t imm = parse_immediate(immStr, isImm);
+    if (!*isImm) {
+        fprintf(stderr, "Error: Invalid immediate value '%s' in %s\n", immStr, name);
+        free(lineToFree);
+        free(srcCopy);
     }
     return imm;
 }
 
-static void encode_instruction(uint8_t opcode, uint8_t mode, uint8_t dst, uint8_t src1, uint8_t src2, int64_t imm,
-                               uint8_t *out, size_t *pos) {
+static void
+encode_instruction(uint8_t opcode,
+                   uint8_t mode,
+                   uint8_t dst,
+                   uint8_t src1,
+                   uint8_t src2,
+                   int64_t imm,
+                   uint8_t *out,
+                   size_t *pos)
+{
     if (out) {
         out[(*pos)++] = opcode;
         out[(*pos)++] = mode;
@@ -170,32 +190,32 @@ static void encode_instruction(uint8_t opcode, uint8_t mode, uint8_t dst, uint8_
     }
 }
 
-size_t assemble(const char *source, uint8_t *output, size_t max_size) {
-    symbol_count = 0;
-    char *src_copy = strdup(source);
+size_t assemble(const char *source, uint8_t *output, size_t maxSize) {
+    symbolCount = 0;
+    char *srcCopy = strdup(source);
 
-    if (!src_copy) {
+    if (!srcCopy) {
         fprintf(stderr, "Error: Memory allocation failed for source copy\n");
         return 0;
     }
 
     size_t pos = 0;
-    char *saveptr;
-    char *line = strtok_r(src_copy, "\n", &saveptr);
+    char *savePtr;
+    char *line = strtok_r(srcCopy, "\n", &savePtr);
 
     while (line != NULL) {
-        char *line_to_trim;
-        char *trimmed = preprocess_line(line, &line_to_trim);
+        char *lineToTrim;
+        char *trimmed = preprocess_line(line, &lineToTrim);
 
-        if (!line_to_trim) {
+        if (!lineToTrim) {
             fprintf(stderr, "Error: Memory allocation failed for line copy\n");
-            free(src_copy);
+            free(srcCopy);
             return 0;
         }
 
         if (*trimmed == '\0') {
-            free(line_to_trim);
-            line = strtok_r(NULL, "\n", &saveptr);
+            free(lineToTrim);
+            line = strtok_r(NULL, "\n", &savePtr);
             continue;
         }
 
@@ -204,10 +224,10 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
             *colon = '\0';
             char *label = trim(trimmed);
 
-            if (symbol_count >= MAX_SYMBOLS) {
+            if (symbolCount >= MAX_SYMBOLS) {
                 fprintf(stderr, "Error: Symbol table overflow, maximum %d symbols allowed\n", MAX_SYMBOLS);
-                free(line_to_trim);
-                free(src_copy);
+                free(lineToTrim);
+                free(srcCopy);
                 return 0;
             }
 
@@ -215,8 +235,8 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
             trimmed = trim(colon + 1);
 
             if (*trimmed == '\0') {
-                free(line_to_trim);
-                line = strtok_r(NULL, "\n", &saveptr);
+                free(lineToTrim);
+                line = strtok_r(NULL, "\n", &savePtr);
                 continue;
             }
         }
@@ -231,8 +251,8 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
 
             if (op == -1) {
                 fprintf(stderr, "Error: Unknown opcode '%s'\n", instr);
-                free(line_to_trim);
-                free(src_copy);
+                free(lineToTrim);
+                free(srcCopy);
                 return 0;
             }
 
@@ -246,8 +266,8 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
 
                     if (!is_imm) {
                         fprintf(stderr, "Error: Invalid immediate value '%s'\n", ops[i]);
-                        free(line_to_trim);
-                        free(src_copy);
+                        free(lineToTrim);
+                        free(srcCopy);
                         return 0;
                     }
 
@@ -255,8 +275,12 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                     if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
                         mode |= ADDR_MODE_IMM8;
                     break;
-                } else if (ops[i][0] != '\0' && ops[i][0] != '%' &&
-                           op != NOP && op != RET && op != EOP) {
+                } else if (ops[i][0] != '\0' &&
+                           ops[i][0] != '%' &&
+                           op != NOP &&
+                           op != RET &&
+                           op != EOP)
+                {
                     mode |= ADDR_MODE_IMM;
                     break;
                 }
@@ -265,34 +289,34 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
             encode_instruction((uint8_t) op, mode, 0, 0, 0, 0, NULL, &pos);
         }
 
-        free(line_to_trim);
-        line = strtok_r(NULL, "\n", &saveptr);
+        free(lineToTrim);
+        line = strtok_r(NULL, "\n", &savePtr);
     }
 
-    free(src_copy);
-    src_copy = strdup(source);
+    free(srcCopy);
+    srcCopy = strdup(source);
 
-    if (!src_copy) {
+    if (!srcCopy) {
         fprintf(stderr, "Error: Memory allocation failed for second source copy\n");
         return 0;
     }
 
-    size_t final_pos = 0;
-    line = strtok_r(src_copy, "\n", &saveptr);
+    size_t finalPos = 0;
+    line = strtok_r(srcCopy, "\n", &savePtr);
 
     while (line != NULL) {
-        char *line_to_trim;
-        char *trimmed = preprocess_line(line, &line_to_trim);
+        char *lineToTrim;
+        char *trimmed = preprocess_line(line, &lineToTrim);
 
-        if (!line_to_trim) {
+        if (!lineToTrim) {
             fprintf(stderr, "Error: Memory allocation failed for line copy in second pass\n");
-            free(src_copy);
+            free(srcCopy);
             return 0;
         }
 
         if (*trimmed == '\0') {
-            free(line_to_trim);
-            line = strtok_r(NULL, "\n", &saveptr);
+            free(lineToTrim);
+            line = strtok_r(NULL, "\n", &savePtr);
             continue;
         }
 
@@ -301,8 +325,8 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
             trimmed = trim(colon + 1);
 
             if (*trimmed == '\0') {
-                free(line_to_trim);
-                line = strtok_r(NULL, "\n", &saveptr);
+                free(lineToTrim);
+                line = strtok_r(NULL, "\n", &savePtr);
                 continue;
             }
         }
@@ -315,7 +339,7 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
         if (op != -1) {
             uint8_t mode = 0, dst = 0, src1 = 0, src2 = 0;
             int64_t imm = 0;
-            bool is_imm = false;
+            bool isImm = false;
 
             char *t_op1 = trim(op1);
             char *t_op2 = trim(op2);
@@ -324,16 +348,16 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
             switch (op) {
                 case MOV:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("MOV", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("MOV", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        int reg = check_reg("MOV", t_op2, line_to_trim, src_copy);
+                        int reg = check_reg("MOV", t_op2, lineToTrim, srcCopy);
                         if (reg == -1) return 0;
                         dst = (uint8_t) reg;
                     } else {
-                        int reg1 = check_reg("MOV", t_op1, line_to_trim, src_copy);
-                        int reg2 = check_reg("MOV", t_op2, line_to_trim, src_copy);
+                        int reg1 = check_reg("MOV", t_op1, lineToTrim, srcCopy);
+                        int reg2 = check_reg("MOV", t_op2, lineToTrim, srcCopy);
                         if (reg1 == -1 || reg2 == -1) return 0;
                         src1 = (uint8_t) reg1;
                         dst = (uint8_t) reg2;
@@ -349,44 +373,44 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case LSH:
                 case RSH:
                     if (t_op1[0] == '$') {
-                        imm = check_imm(instr, t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        int reg = check_reg(instr, t_op2, line_to_trim, src_copy);
+                        int reg = check_reg(instr, t_op2, lineToTrim, srcCopy);
                         if (reg == -1) return 0;
                         dst = (uint8_t) reg;
                         src1 = dst;
                     } else if (count == 3) {
-                        int reg1 = check_reg(instr, t_op1, line_to_trim, src_copy);
-                        int reg2 = check_reg(instr, t_op2, line_to_trim, src_copy);
+                        int reg1 = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                        int reg2 = check_reg(instr, t_op2, lineToTrim, srcCopy);
                         if (reg1 == -1 || reg2 == -1) return 0;
                         src2 = (uint8_t) reg1;
                         dst = (uint8_t) reg2;
                         src1 = dst;
                     } else if (count == 4) {
-                        int reg1 = check_reg(instr, t_op1, line_to_trim, src_copy);
+                        int reg1 = check_reg(instr, t_op1, lineToTrim, srcCopy);
                         if (reg1 == -1) return 0;
                         src1 = (uint8_t) reg1;
                         if (t_op2[0] == '$') {
-                            imm = check_imm(instr, t_op2, &is_imm, line_to_trim, src_copy);
-                            if (!is_imm) return 0;
+                            imm = check_imm(instr, t_op2, &isImm, lineToTrim, srcCopy);
+                            if (!isImm) return 0;
                             mode = ADDR_MODE_IMM;
                             if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
                                 mode |= ADDR_MODE_IMM8;
                         } else {
-                            int reg2 = check_reg(instr, t_op2, line_to_trim, src_copy);
+                            int reg2 = check_reg(instr, t_op2, lineToTrim, srcCopy);
                             if (reg2 == -1) return 0;
                             src2 = (uint8_t) reg2;
                         }
-                        int reg3 = check_reg(instr, t_op3, line_to_trim, src_copy);
+                        int reg3 = check_reg(instr, t_op3, lineToTrim, srcCopy);
                         if (reg3 == -1) return 0;
                         dst = (uint8_t) reg3;
                     }
                     break;
                 case INC:
                 case DEC: {
-                    int reg_inc = check_reg(instr, t_op1, line_to_trim, src_copy);
+                    int reg_inc = check_reg(instr, t_op1, lineToTrim, srcCopy);
                     if (reg_inc == -1) return 0;
                     dst = (uint8_t) reg_inc;
                     break;
@@ -394,11 +418,11 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case JMP:
                 case CALL:
                     if (t_op1[0] == '$') {
-                        imm = check_imm(instr, t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else if (t_op1[0] == '%') {
-                        int reg = check_reg(instr, t_op1, line_to_trim, src_copy);
+                        int reg = check_reg(instr, t_op1, lineToTrim, srcCopy);
                         if (reg == -1) return 0;
                         src1 = (uint8_t) reg;
                         src2 = src1;
@@ -406,8 +430,8 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                         imm = find_symbol(t_op1);
                         if (imm == -1) {
                             fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op1, instr);
-                            free(line_to_trim);
-                            free(src_copy);
+                            free(lineToTrim);
+                            free(srcCopy);
                             return 0;
                         }
                         mode = ADDR_MODE_IMM;
@@ -420,15 +444,15 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 case JLE:
                 case JGE:
                     if (t_op1[0] == '$') {
-                        imm = check_imm(instr, t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm(instr, t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
                         imm = find_symbol(t_op1);
                         if (imm == -1) {
                             fprintf(stderr, "Error: Undefined symbol '%s' in %s\n", t_op1, instr);
-                            free(line_to_trim);
-                            free(src_copy);
+                            free(lineToTrim);
+                            free(srcCopy);
                             return 0;
                         }
                         mode = ADDR_MODE_IMM;
@@ -436,45 +460,45 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                     break;
                 case LOOP:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("LOOP", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("LOOP", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
                         imm = find_symbol(t_op1);
                         if (imm == -1) {
                             fprintf(stderr, "Error: Undefined symbol '%s' in LOOP\n", t_op1);
-                            free(line_to_trim);
-                            free(src_copy);
+                            free(lineToTrim);
+                            free(srcCopy);
                             return 0;
                         }
                         mode = ADDR_MODE_IMM;
                     }
-                    int reg_jump = check_reg("LOOP", t_op2, line_to_trim, src_copy);
-                    if (reg_jump == -1) return 0;
-                    dst = (uint8_t) reg_jump;
+                    int regJump = check_reg("LOOP", t_op2, lineToTrim, srcCopy);
+                    if (regJump == -1) return 0;
+                    dst = (uint8_t) regJump;
                     src1 = dst;
                     break;
                 case CMP:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("CMP", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("CMP", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
-                        int reg = check_reg("CMP", t_op2, line_to_trim, src_copy);
+                        int reg = check_reg("CMP", t_op2, lineToTrim, srcCopy);
                         if (reg == -1) return 0;
                         src1 = (uint8_t) reg;
                     } else {
-                        int reg1 = check_reg("CMP", t_op1, line_to_trim, src_copy);
+                        int reg1 = check_reg("CMP", t_op1, lineToTrim, srcCopy);
                         if (reg1 == -1) return 0;
                         src1 = (uint8_t) reg1;
                         if (t_op2[0] == '$') {
-                            imm = check_imm("CMP", t_op2, &is_imm, line_to_trim, src_copy);
-                            if (!is_imm) return 0;
+                            imm = check_imm("CMP", t_op2, &isImm, lineToTrim, srcCopy);
+                            if (!isImm) return 0;
                             mode = ADDR_MODE_IMM;
                             if (imm > 0xFFFFFFFFLL || imm < -2147483648LL)
                                 mode |= ADDR_MODE_IMM8;
                         } else {
-                            int reg2 = check_reg("CMP", t_op2, line_to_trim, src_copy);
+                            int reg2 = check_reg("CMP", t_op2, lineToTrim, srcCopy);
                             if (reg2 == -1) return 0;
                             src2 = (uint8_t) reg2;
                         }
@@ -482,28 +506,28 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                     break;
                 case LOAD:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("LOAD", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("LOAD", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
-                        int reg = check_reg("LOAD", t_op1, line_to_trim, src_copy);
+                        int reg = check_reg("LOAD", t_op1, lineToTrim, srcCopy);
                         if (reg == -1) return 0;
                         src1 = (uint8_t) reg;
                     }
-                    int reg_load_dst = check_reg("LOAD", t_op2, line_to_trim, src_copy);
-                    if (reg_load_dst == -1) return 0;
-                    dst = (uint8_t) reg_load_dst;
+                    int regLoadDst = check_reg("LOAD", t_op2, lineToTrim, srcCopy);
+                    if (regLoadDst == -1) return 0;
+                    dst = (uint8_t) regLoadDst;
                     break;
                 case STORE: {
-                    int reg_store_src = check_reg("STORE", t_op1, line_to_trim, src_copy);
-                    if (reg_store_src == -1) return 0;
-                    src1 = (uint8_t) reg_store_src;
+                    int regStoreSrc = check_reg("STORE", t_op1, lineToTrim, srcCopy);
+                    if (regStoreSrc == -1) return 0;
+                    src1 = (uint8_t) regStoreSrc;
                     if (t_op2[0] == '$') {
-                        imm = check_imm("STORE", t_op2, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("STORE", t_op2, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
-                        int reg2 = check_reg("STORE", t_op2, line_to_trim, src_copy);
+                        int reg2 = check_reg("STORE", t_op2, lineToTrim, srcCopy);
                         if (reg2 == -1) return 0;
                         src2 = (uint8_t) reg2;
                     }
@@ -512,27 +536,27 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 }
                 case PUSH:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("PUSH", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("PUSH", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
-                        int reg_push = check_reg("PUSH", t_op1, line_to_trim, src_copy);
+                        int reg_push = check_reg("PUSH", t_op1, lineToTrim, srcCopy);
                         if (reg_push == -1) return 0;
                         src1 = (uint8_t) reg_push;
                     }
                     break;
                 case POP: {
-                    int reg_pop_dst = check_reg("POP", t_op1, line_to_trim, src_copy);
-                    if (reg_pop_dst == -1) return 0;
-                    dst = (uint8_t) reg_pop_dst;
+                    int regPopDst = check_reg("POP", t_op1, lineToTrim, srcCopy);
+                    if (regPopDst == -1) return 0;
+                    dst = (uint8_t) regPopDst;
                     break;
                 }
                 case SETZ:
                 case TIME:
                 case DEBUG: {
-                    int reg_set_dst = check_reg(instr, t_op1, line_to_trim, src_copy);
-                    if (reg_set_dst == -1) return 0;
-                    dst = (uint8_t) reg_set_dst;
+                    int regSetDst = check_reg(instr, t_op1, lineToTrim, srcCopy);
+                    if (regSetDst == -1) return 0;
+                    dst = (uint8_t) regSetDst;
                     break;
                 }
                 case RET:
@@ -540,23 +564,23 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                     break;
                 case EOPV:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("EOPV", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("EOPV", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                     } else {
-                        int reg_eopv = check_reg("EOPV", t_op1, line_to_trim, src_copy);
+                        int reg_eopv = check_reg("EOPV", t_op1, lineToTrim, srcCopy);
                         if (reg_eopv == -1) return 0;
                         src1 = (uint8_t) reg_eopv;
                     }
                     break;
                 case SYSCALL:
                     if (t_op1[0] == '$') {
-                        imm = check_imm("SYSCALL", t_op1, &is_imm, line_to_trim, src_copy);
-                        if (!is_imm) return 0;
+                        imm = check_imm("SYSCALL", t_op1, &isImm, lineToTrim, srcCopy);
+                        if (!isImm) return 0;
                         mode = ADDR_MODE_IMM;
                         if (imm > 0xFFFFFFFFLL || imm < -2147483648LL) mode |= ADDR_MODE_IMM8;
                     } else if (t_op1[0] == '%') {
-                        int reg_syscall = check_reg("SYSCALL", t_op1, line_to_trim, src_copy);
+                        int reg_syscall = check_reg("SYSCALL", t_op1, lineToTrim, srcCopy);
                         if (reg_syscall == -1) return 0;
                         src1 = (uint8_t) reg_syscall;
                     }
@@ -564,23 +588,23 @@ size_t assemble(const char *source, uint8_t *output, size_t max_size) {
                 default: break;
             }
 
-            size_t instr_size = 5;
-            if (mode & ADDR_MODE_IMM) instr_size += (mode & ADDR_MODE_IMM8) ? 8 : 4;
+            size_t instrSize = 5;
+            if (mode & ADDR_MODE_IMM) instrSize += (mode & ADDR_MODE_IMM8) ? 8 : 4;
 
-            if (output && final_pos + instr_size > max_size) {
-                fprintf(stderr, "Error: Output buffer overflow, required size %zu, max size %zu\n", final_pos + instr_size, max_size);
-                free(line_to_trim);
-                free(src_copy);
+            if (output && finalPos + instrSize > maxSize) {
+                fprintf(stderr, "Error: Output buffer overflow, required size %zu, max size %zu\n", finalPos + instrSize, maxSize);
+                free(lineToTrim);
+                free(srcCopy);
                 return 0;
             }
 
-            encode_instruction((uint8_t)op, mode, dst, src1, src2, imm, output, &final_pos);
+            encode_instruction((uint8_t)op, mode, dst, src1, src2, imm, output, &finalPos);
         }
 
-        free(line_to_trim);
-        line = strtok_r(NULL, "\n", &saveptr);
+        free(lineToTrim);
+        line = strtok_r(NULL, "\n", &savePtr);
     }
 
-    free(src_copy);
-    return final_pos;
+    free(srcCopy);
+    return finalPos;
 }

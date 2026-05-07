@@ -5,8 +5,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 CPU cpu;
+
+static bool noAnsi = false;
+static bool minimal = false;
+
+#define ANSI_RED() (noAnsi ? "" : "\x1b[91m\x1b[1m")
+#define ANSI_GREEN() (noAnsi ? "" : "\x1b[92m\x1b[1m")
+#define ANSI_YELLOW() (noAnsi ? "" : "\x1b[93m\x1b[1m")
+#define ANSI_CYAN() (noAnsi ? "" : "\x1b[96m")
+#define ANSI_RESET() (noAnsi ? "" : "\x1b[0m")
 
 static double
 get_time_sec(struct timespec ts)
@@ -15,108 +25,131 @@ get_time_sec(struct timespec ts)
 }
 
 char *
-read_assembly_file(const char *filepath, size_t *out_size)
+read_assembly_file(const char *filePath, size_t *outSize)
 {
-    FILE *file = fopen(filepath, "rb");
+    FILE *file = fopen(filePath, "rb");
     if (!file) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: Cannot open file '%s'\n\x1b[0m", filepath);
+        fprintf(stderr, "%s✗ Error: Cannot open file '%s'%s\n", ANSI_RED(), filePath, ANSI_RESET());
         return NULL;
     }
 
     fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
+    long fileSize = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    if (file_size <= 0) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: File '%s' is empty or invalid\n\x1b[0m", filepath);
+    if (fileSize <= 0) {
+        fprintf(stderr, "%s✗ Error: File '%s' is empty or invalid%s\n", ANSI_RED(), filePath, ANSI_RESET());
         fclose(file);
         return NULL;
     }
 
-    char *buffer = (char *) malloc(file_size + 1);
+    char *buffer = (char *) malloc(fileSize + 1);
     if (!buffer) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: Memory allocation failed\n\x1b[0m");
+        fprintf(stderr, "%s✗ Error: Memory allocation failed%s\n", ANSI_RED(), ANSI_RESET());
         fclose(file);
         return NULL;
     }
 
-    size_t read_size = fread(buffer, 1, file_size, file);
-    if (read_size != (size_t) file_size) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: Failed to read file '%s'\n\x1b[0m", filepath);
+    size_t readSize = fread(buffer, 1, fileSize, file);
+    if (readSize != (size_t)fileSize) {
+        fprintf(stderr, "%s✗ Error: Failed to read file '%s'%s\n", ANSI_RED(), filePath, ANSI_RESET());
         free(buffer);
         fclose(file);
         return NULL;
     }
 
-    buffer[file_size] = '\0';
+    buffer[fileSize] = '\0';
     fclose(file);
 
-    if (out_size) {
-        *out_size = file_size;
+    if (outSize) {
+        *outSize = fileSize;
     }
 
     return buffer;
 }
 
 void
-print_usage(const char *program_name)
+print_usage(const char *programName)
 {
-    printf("\x1b[96m\x1b[1mUsage:\x1b[0m %s <assembly_file.asm>\n", program_name);
-    printf("\x1b[96m\x1b[1mExample:\x1b[0m\n");
-    printf("  %s program.asm\n", program_name);
+    printf("%sUsage:%s %s <assembly_file.asm>\n", ANSI_CYAN(), ANSI_RESET(), programName);
+    printf("%sExample:%s\n", ANSI_CYAN(), ANSI_RESET());
+    printf("  %s program.asm\n", programName);
 }
 
 char *
-get_filename_from_user()
+get_filename_from_user(void)
 {
-    static char filename[256];
+    static char fileName[256];
 
-    printf("\x1b[92m\x1b[1mWVM - Warp speed Virtual Machine\x1b[0m\n");
-    printf("\x1b[96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\x1b[0m\n");
-    printf("\x1b[93m\x1b[1mAssembly file not specified.\x1b[0m\n\n");
-    printf("\x1b[1mEnter assembly file path:\x1b[0m ");
+    printf("%sWVM - Warp speed Virtual Machine%s\n", ANSI_GREEN(), ANSI_RESET());
+    printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫%s\n", ANSI_CYAN(), ANSI_RESET());
+    printf("%sAssembly file not specified.%s\n\n", ANSI_YELLOW(), ANSI_RESET());
+    printf("%sEnter assembly file path:%s ", ANSI_RESET(), ANSI_RESET());
 
-    if (fgets(filename, sizeof(filename), stdin) == NULL) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: Failed to read input\n\x1b[0m");
+    if (fgets(fileName, sizeof(fileName), stdin) == NULL) {
+        fprintf(stderr, "%s✗ Error: Failed to read input%s\n", ANSI_RED(), ANSI_RESET());
         return NULL;
     }
 
-    size_t len = strlen(filename);
-    if (len > 0 && filename[len - 1] == '\n') {
-        filename[len - 1] = '\0';
+    size_t len = strlen(fileName);
+    if (len > 0 && fileName[len - 1] == '\n') {
+        fileName[len - 1] = '\0';
     }
 
-    if (strlen(filename) == 0) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: Filename cannot be empty\n\x1b[0m");
+    if (strlen(fileName) == 0) {
+        fprintf(stderr, "%s✗ Error: Filename cannot be empty%s\n", ANSI_RED(), ANSI_RESET());
         return NULL;
     }
 
-    return filename;
+    return fileName;
 }
 
 int
 main(int argc, char *argv[])
 {
-    const char *filepath;
+    const char *filePath = NULL;
 
-    if (argc < 2) {
-        filepath = get_filename_from_user();
-        if (!filepath) {
+    int arg_index = 1;
+    while (arg_index < argc) {
+        if (strcmp(argv[arg_index], "--help") == 0 || strcmp(argv[arg_index], "-h") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[arg_index], "--no-ansi") == 0) {
+            noAnsi = true;
+            arg_index++;
+        } else if (strcmp(argv[arg_index], "--minimal") == 0) {
+            minimal = true;
+            noAnsi = true;
+            arg_index++;
+        } else if (argv[arg_index][0] != '-') {
+            filePath = argv[arg_index];
+            break;
+        } else {
+            arg_index++;
+        }
+    }
+
+    if (!filePath) {
+        if (!minimal) {
+            filePath = get_filename_from_user();
+        } else {
             print_usage(argv[0]);
             return 1;
         }
-    } else {
-        filepath = argv[1];
+        if (!filePath) {
+            return 1;
+        }
     }
-    size_t file_size = 0;
-    char *assembly = read_assembly_file(filepath, &file_size);
+
+    size_t fileSize = 0;
+    char *assembly = read_assembly_file(filePath, &fileSize);
 
     if (!assembly) {
         return 1;
     }
 
     if (cpu_init(&cpu, 4096)) {
-        fprintf(stderr, "\x1b[91m\x1b[1m✗ Error: CPU initialization failed\n\x1b[0m");
+        fprintf(stderr, "%s✗ Error: CPU initialization failed%s\n", ANSI_RED(), ANSI_RESET());
         free(assembly);
         return 1;
     }
@@ -124,40 +157,50 @@ main(int argc, char *argv[])
     uint8_t program[4096];
     struct timespec start, end;
 
-    printf("\x1b[92m\x1b[1m┌─═══[Assemble start ]═══─┐\n\x1b[0m");
+    if (!minimal) {
+        printf("%s┌─═══[Assemble start ]═══─┐\n%s", ANSI_GREEN(), ANSI_RESET());
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &start);
         size_t size = assemble(assembly, program, sizeof(program));
     clock_gettime(CLOCK_MONOTONIC, &end);
-    double assemble_time = get_time_sec(end) - get_time_sec(start);
+    double assembleTime = get_time_sec(end) - get_time_sec(start);
 
     if (size == 0) {
-        fprintf(stderr, "\x1b[91m\x1b[1m└─═══[Assemble fail]═══─┘\n\x1b[0m");
+        if (minimal) {
+            fprintf(stderr, "Assemble failed\n");
+        } else {
+            fprintf(stderr, "%s└─═══[Assemble fail]═══─┘%s\n", ANSI_RED(), ANSI_RESET());
+        }
         cpu_free(&cpu);
         free(assembly);
         return 1;
     }
 
-    printf("Assemble Success\n");
-
-    printf("\x1b[92m\x1b[1m└─═══[Assemble finish]═══─┘\n\x1b[0m\n");
+    if (!minimal) {
+        printf("Assemble Success\n");
+        printf("%s└─═══[Assemble finish]═══─┘%s\n\n", ANSI_GREEN(), ANSI_RESET());
+    }
 
     load_program(&cpu, program, size);
 
-    printf("\x1b[92m\x1b[1m┌─═══[VM start   ]═══─┐\n\x1b[0m");
+    if (!minimal) {
+        printf("%s┌─═══[VM start   ]═══─┐%s\n", ANSI_GREEN(), ANSI_RESET());
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-        const int64_t rv = run(&cpu);
+        const int64_t returnValue = run(&cpu);
     clock_gettime(CLOCK_MONOTONIC, &end);
-    double run_time = get_time_sec(end) - get_time_sec(start);
+    double runTime = get_time_sec(end) - get_time_sec(start);
 
-    printf("\x1b[92m\x1b[1m└─═══[VM finished]═══─┘\n\x1b[0m\n");
-
-    printf("\x1b[96m┌─═══[Performance Report]═══─┐\n\x1b[0m");
-    printf("\x1b[96m│ Assembly time: \x1b[93m%.6f s\x1b[96m  │\n\x1b[0m", assemble_time);
-    printf("\x1b[96m│ VM Run time:   \x1b[93m%.6f s\x1b[96m  │\n\x1b[0m", run_time);
-    printf("\x1b[96m│ Return Value:  \x1b[92m\x1b[1m%ld\x1b[96m           │\n\x1b[0m", rv);
-    printf("\x1b[96m└─══════════════════════════─┘\n\x1b[0m");
+    if (!minimal) {
+        printf("%s└─═══[VM finished]═══─┘%s\n\n", ANSI_GREEN(), ANSI_RESET());
+        printf("%s┌─═══[Performance Report]═══─┐%s\n", ANSI_CYAN(), ANSI_RESET());
+        printf("%s│ Assembly time: %s%.6f s%s  │%s\n", ANSI_CYAN(), ANSI_YELLOW(), assembleTime, ANSI_CYAN(), ANSI_RESET());
+        printf("%s│ VM Run time:   %s%.6f s%s  │%s\n", ANSI_CYAN(), ANSI_YELLOW(), runTime, ANSI_CYAN(), ANSI_RESET());
+        printf("%s│ Return Value:  %s%ld%s           │%s\n", ANSI_CYAN(), ANSI_GREEN(), returnValue, ANSI_CYAN(), ANSI_RESET());
+        printf("%s└─══════════════════════════─┘%s\n", ANSI_CYAN(), ANSI_RESET());
+    }
 
     cpu_free(&cpu);
     free(assembly);

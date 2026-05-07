@@ -1,8 +1,6 @@
 #ifndef WVM_OPCODE_H
 #define WVM_OPCODE_H
 
-#include <stdint.h>
-
 typedef enum opcode {
     NOP = 0,
     ADD = 1,

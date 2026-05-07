@@ -4,13 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 #include "../memory/ram/ram.h"
 #include "../memory/register/register.h"
-#include "../bytecode/opcode.h"
 
 #define ADDR_MODE_IMM  0x01
 #define ADDR_MODE_IMM8 0x02
@@ -37,11 +32,11 @@ typedef struct {
     Registers regs;
     RAM ram;
     ram_addr_t pc;
-    instr_t *decoded_program;
-    ram_addr_t decoded_size;
+    instr_t *decodedProgram;
+    ram_addr_t decodedSize;
     bool running;
-    bool is_threaded;
-    int64_t rv;
+    bool isThreaded;
+    int64_t returnValue;
 } CPU;
 
 #define INSTR_MIN_SIZE 5
@@ -49,13 +44,13 @@ typedef struct {
 
 bool instr_decode(const uint8_t *buffer, size_t limit, instr_t *instr);
 
-ram_addr_t instr_array_size(const ram_addr_t instr_count);
+ram_addr_t instr_array_size( ram_addr_t instr_count);
 
-int cpu_init(CPU *cpu, const ram_addr_t ram_size);
+int cpu_init(CPU *cpu, ram_addr_t ram_size);
 
 void cpu_free(CPU *cpu);
 
-void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size);
+void load_program(CPU *cpu, const uint8_t *code, ram_addr_t size);
 
 void cpu_dump_registers(const CPU *cpu);
 

@@ -5,14 +5,6 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "../bytecode/opcode.h"
-#include "../cpu/cpu.h"
-#include <ctype.h>
-#include <errno.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef enum {
     ASM_ERROR_NONE = 0,
@@ -28,16 +20,16 @@ typedef enum {
 
 typedef struct {
     AsmErrorType type;
-    int line_number;
+    int lineNumber;
     char message[256];
-    char problematic_line[512];
+    char problematicLine[512];
 } AsmError;
 
 typedef struct {
-    AsmError last_error;
-    int total_lines;
-    int error_count;
-    bool debug_mode;
+    AsmError lastError;
+    int totalLines;
+    int errorCount;
+    bool debugMode;
 } AsmContext;
 
 typedef struct {
@@ -55,6 +47,6 @@ const char *asm_get_error_type(AsmErrorType type);
 
 size_t asm_assemble(AsmContext *ctx, const char *source, uint8_t *output, size_t max_size);
 
-size_t assemble(const char *source, uint8_t *output, size_t max_size);
+size_t assemble(const char *source, uint8_t *output, size_t maxSize);
 
 #endif

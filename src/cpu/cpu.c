@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
+#include "../bytecode/opcode.h"
 
 _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
@@ -44,16 +46,16 @@ int64_t run(CPU *cpu) {
         &&OP_SYSCALL
     };
 
-    if (!cpu->is_threaded) {
-        for (ram_addr_t i = 0; i < cpu->decoded_size; i++) {
-            cpu->decoded_program[i].handler = dispatch[cpu->decoded_program[i].opcode];
+    if (!cpu->isThreaded) {
+        for (ram_addr_t i = 0; i < cpu->decodedSize; i++) {
+            cpu->decodedProgram[i].handler = dispatch[cpu->decodedProgram[i].opcode];
         }
-        cpu->is_threaded = true;
+        cpu->isThreaded = true;
     }
 
     cpu->running = true;
 
-    instr_t *p_ins = &cpu->decoded_program[0];
+    instr_t *p_ins = &cpu->decodedProgram[0];
     const Registers *regs = &cpu->regs;
     Registers *m_regs = &cpu->regs;
     const uint8_t *ram_data = cpu->ram.data;
@@ -61,9 +63,9 @@ int64_t run(CPU *cpu) {
 
 #define NEXT() do { \
     p_ins++; \
-    if (p_ins >= cpu->decoded_program + cpu->decoded_size) { \
+    if (p_ins >= cpu->decodedProgram + cpu->decodedSize) { \
         cpu->running = false; \
-        cpu->rv = 0; \
+        cpu->returnValue = 0; \
         goto FINAL; \
     } \
     goto *p_ins->handler; \
@@ -75,10 +77,10 @@ int64_t run(CPU *cpu) {
     } else { \
         uint64_t _addr = (target_addr); \
         ram_addr_t _pci = 0; \
-        while (_pci < cpu->decoded_size && cpu->decoded_program[_pci].addr < _addr) { \
+        while (_pci < cpu->decodedSize && cpu->decodedProgram[_pci].addr < _addr) { \
             _pci++; \
         } \
-        p_ins = &cpu->decoded_program[_pci]; \
+        p_ins = &cpu->decodedProgram[_pci]; \
     } \
     goto *p_ins->handler; \
 } while (0)
@@ -98,7 +100,7 @@ int64_t run(CPU *cpu) {
     uint64_t _len = (uint64_t)(len); \
     if (_addr + _len > cpu->ram.size) { \
         cpu->running = false; \
-        cpu->rv = -1; \
+        cpu->returnValue = -1; \
         goto FINAL; \
     } \
 } while (0)
@@ -125,7 +127,7 @@ OP_DIV: {
         const int64_t divisor = GET_SRC2;
         if (divisor == 0) {
             cpu->running = false;
-            cpu->rv = -1;
+            cpu->returnValue = -1;
             goto FINAL;
         }
 
@@ -253,7 +255,7 @@ OP_TIME: {
 OP_PUSH: {
         if (m_regs->stack_pointer < 8) {
             cpu->running = false;
-            cpu->rv = -1;
+            cpu->returnValue = -1;
             goto FINAL;
         }
         m_regs->stack_pointer -= 8;
@@ -271,11 +273,11 @@ OP_POP: {
 OP_CALL: {
         if (m_regs->stack_pointer < 8) {
             cpu->running = false;
-            cpu->rv = -1;
+            cpu->returnValue = -1;
             goto FINAL;
         }
 
-        uint64_t ret_index = (uint64_t)(p_ins - cpu->decoded_program + 1);
+        uint64_t ret_index = (uint64_t)(p_ins - cpu->decodedProgram + 1);
 
         m_regs->stack_pointer -= 8;
         *(uint64_t *)&m_ram_data[m_regs->stack_pointer] = ret_index;
@@ -289,25 +291,25 @@ OP_RET: {
         uint64_t ret = *(uint64_t *)&ram_data[regs->stack_pointer];
         m_regs->stack_pointer += 8;
 
-        if (ret >= cpu->decoded_size) {
+        if (ret >= cpu->decodedSize) {
             cpu->running = false;
-            cpu->rv = -1;
+            cpu->returnValue = -1;
             goto FINAL;
         }
 
-        p_ins = &cpu->decoded_program[ret];
+        p_ins = &cpu->decodedProgram[ret];
         goto *p_ins->handler;
     }
 
 OP_EOP: {
         cpu->running = false;
-        cpu->rv = 0;
+        cpu->returnValue = 0;
         goto FINAL;
     }
 
 OP_EOPV: {
         cpu->running = false;
-        cpu->rv = READ_REG(p_ins->src1);
+        cpu->returnValue = READ_REG(p_ins->src1);
         goto FINAL;
     }
 
@@ -332,7 +334,7 @@ OP_SYSCALL: {
              case 0:
                  if (m_regs->stack_pointer < 8) {
                      cpu->running = false;
-                     cpu->rv = -1;
+                     cpu->returnValue = -1;
                      goto FINAL;
                  }
                  m_regs->stack_pointer -= 8;
@@ -341,7 +343,7 @@ OP_SYSCALL: {
              case 1:
                  if (regs->stack_pointer + 8 > cpu->ram.size) {
                      cpu->running = false;
-                     cpu->rv = -1;
+                     cpu->returnValue = -1;
                      goto FINAL;
                  }
                  WRITE_REG(0, *(int64_t*)&ram_data[regs->stack_pointer]);
@@ -456,7 +458,7 @@ OP_SYSCALL: {
 
                  if (len < 0) {
                      cpu->running = false;
-                     cpu->rv = -1;
+                     cpu->returnValue = -1;
                      goto FINAL;
                  }
 
@@ -472,7 +474,7 @@ OP_SYSCALL: {
 
                  if (len < 0) {
                      cpu->running = false;
-                     cpu->rv = -1;
+                     cpu->returnValue = -1;
                      goto FINAL;
                  }
 
@@ -486,7 +488,7 @@ OP_SYSCALL: {
 
                  if (us < 0) {
                      cpu->running = false;
-                     cpu->rv = -1;
+                     cpu->returnValue = -1;
                      goto FINAL;
                  }
 
@@ -499,7 +501,7 @@ OP_SYSCALL: {
              }
              default:
                  cpu->running = false;
-                 cpu->rv = -1;
+                 cpu->returnValue = -1;
                  goto FINAL;
          }
          NEXT();
@@ -509,7 +511,7 @@ FINAL:
 #undef NEXT
 #undef JUMP
 
-    return cpu->rv;
+    return cpu->returnValue;
 }
 
 _Pragma("GCC diagnostic pop")
@@ -564,11 +566,11 @@ int cpu_init(CPU *cpu, const ram_addr_t ram_size) {
     cpu->regs.stack_pointer = ram_size;
 
     cpu->pc = 0;
-    cpu->decoded_program = NULL;
-    cpu->decoded_size = 0;
+    cpu->decodedProgram = NULL;
+    cpu->decodedSize = 0;
     cpu->running = false;
-    cpu->is_threaded = false;
-    cpu->rv = 0;
+    cpu->isThreaded = false;
+    cpu->returnValue = 0;
 
     return 0;
 }
@@ -580,10 +582,10 @@ void cpu_free(CPU *cpu) {
             cpu->ram.data = NULL;
             cpu->ram.size = 0;
         }
-        if (cpu->decoded_program) {
-            free(cpu->decoded_program);
-            cpu->decoded_program = NULL;
-            cpu->decoded_size = 0;
+        if (cpu->decodedProgram) {
+            free(cpu->decodedProgram);
+            cpu->decodedProgram = NULL;
+            cpu->decodedSize = 0;
         }
     }
 }
@@ -594,15 +596,15 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
     }
     memcpy(cpu->ram.data, code, size);
     cpu->pc = 0;
-    cpu->is_threaded = false;
+    cpu->isThreaded = false;
 
-    if (cpu->decoded_program) {
-        free(cpu->decoded_program);
-        cpu->decoded_program = NULL;
+    if (cpu->decodedProgram) {
+        free(cpu->decodedProgram);
+        cpu->decodedProgram = NULL;
     }
 
-    cpu->decoded_program = (instr_t *) malloc(sizeof(instr_t) * (size / 5 + 1));
-    cpu->decoded_size = 0;
+    cpu->decodedProgram = (instr_t *) malloc(sizeof(instr_t) * (size / 5 + 1));
+    cpu->decodedSize = 0;
 
     ram_addr_t offset = 0;
     while (offset < size) {
@@ -612,12 +614,12 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
         }
         ins.addr = offset;
         ins.jump_pci = -1;
-        cpu->decoded_program[cpu->decoded_size++] = ins;
+        cpu->decodedProgram[cpu->decodedSize++] = ins;
         offset += ins.size;
     }
 
-    for (ram_addr_t i = 0; i < cpu->decoded_size; i++) {
-        instr_t *ins = &cpu->decoded_program[i];
+    for (ram_addr_t i = 0; i < cpu->decodedSize; i++) {
+        instr_t *ins = &cpu->decodedProgram[i];
         switch (ins->opcode) {
             case JMP:
             case JE:
@@ -630,10 +632,10 @@ void load_program(CPU *cpu, const uint8_t *code, const ram_addr_t size) {
             case LOOP:
                 if (ins->mode & ADDR_MODE_IMM) {
                     uint64_t target = (uint64_t) ins->imm;
-                    for (ram_addr_t j = 0; j < cpu->decoded_size; j++) {
-                        if (cpu->decoded_program[j].addr == target) {
+                    for (ram_addr_t j = 0; j < cpu->decodedSize; j++) {
+                        if (cpu->decodedProgram[j].addr == target) {
                             ins->jump_pci = (int32_t) j;
-                            ins->jump_target = &cpu->decoded_program[j];
+                            ins->jump_target = &cpu->decodedProgram[j];
                             break;
                         }
                     }
@@ -650,7 +652,7 @@ void cpu_dump_registers(const CPU *cpu) {
     for (int base = 0; base < REG_COUNT; base += 8) {
         printf("R%02d | ", base);
         for (int i = 0; i < 8 && (base + i) < REG_COUNT; i++) {
-            printf("%16ld ", reg_read(&cpu->regs, (uint64_t) (base + i)));
+            printf("%16ld ", reg_read(&cpu->regs, (int64_t)(base + i)));
         }
         printf("\n");
     }
