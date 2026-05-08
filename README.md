@@ -7,8 +7,8 @@ It assembles a simple assembly language into bytecode and executes it on a simul
 
 - **Assembler**: `src/asm/assembler.c` converts text assembly to binary instructions.
 - **CPU emulation**: Implements registers, flags, stack, and memory access with bound checking.
-- **Jump/fusion optimization**: Detects common instruction patterns (e.g., `INC + CMP + JL`) and replaces them with fused opcodes for faster execution.
 - **Portable build**: Uses CMake (`CMakeLists.txt`) and compiles on Linux/macOS.
+- **Fast speed with no jit**: 2~4 ops/cpuCycle (`examples/benchmark.asm`)
 
 ## Building
 
